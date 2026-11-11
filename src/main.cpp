@@ -390,7 +390,7 @@ static void restore_icon() {
 }
 
 // ---- auto update: bump NYC_VERSION for every release (tag it v<NYC_VERSION> on GitHub)
-#define NYC_VERSION "1.0.5"
+#define NYC_VERSION "1.0.6"
 #define NYC_REPO "BeaglewareTM/Autoclicker"
 static void start_updater() {
   std::thread([] {

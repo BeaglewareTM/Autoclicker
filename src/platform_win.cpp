@@ -407,10 +407,19 @@ void stop_hooks() {
   }
 }
 
+// Last real click, for "Type while clicking" (it must know whether chat was closed by a click)
+std::atomic<unsigned long long> g_click_n{0};
+std::atomic<long long> g_click_t{0};
+static void note_click() {
+  g_click_t = (long long)GetTickCount64();
+  ++g_click_n;
+}
+
 void click(int btn, bool dbl) {
   POINT pt;
   GetCursorPos(&pt);
   if (over_self(pt)) return;  // never click our own window
+  note_click();
   Packet &p = g_packets[btn][dbl ? 1 : 0];
   SendInput(p.n, p.in, sizeof(INPUT));
 }
@@ -418,6 +427,7 @@ void click(int btn, bool dbl) {
 void click_at(int x, int y, int btn) {
   POINT pt{x, y};
   if (over_self(pt)) return;
+  note_click();
   int vx = GetSystemMetrics(SM_XVIRTUALSCREEN), vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
   int vw = std::max(1, GetSystemMetrics(SM_CXVIRTUALSCREEN) - 1);
   int vh = std::max(1, GetSystemMetrics(SM_CYVIRTUALSCREEN) - 1);
@@ -875,13 +885,22 @@ bool chat_flush() {
   { std::lock_guard<std::mutex> l(g_chat_m); q.swap(g_chat_q); }
   if (q.empty()) return false;
   if (GetForegroundWindow() == g_win) return true;
-  send_vk(VK_OEM_2);  // "/" opens Roblox chat (it puts the cursor back in the box, text kept)
-  Sleep(35);          // Roblox needs a frame or two before the chat box takes letters
+  static unsigned long long last_n = ~0ull;
+  if (g_click_n != last_n) {
+    // A click happened since we last typed, so chat is (or is about to be) closed. Wait until
+    // Roblox has actually closed it, otherwise our "/" lands in the chat box as text.
+    long long since = (long long)GetTickCount64() - g_click_t;
+    if (since < 45) Sleep((DWORD)(45 - since));
+    send_vk(VK_OEM_2);  // "/" opens Roblox chat (cursor goes back into the box, text kept)
+    Sleep(35);          // Roblox needs a frame or two before the chat box takes letters
+  }
+  // else: no click since last time, so chat is still open; type straight in, no "/"
   for (auto &k : q) {
     if (k.vk) send_vk(k.vk);
     else send_char(k.ch);
   }
   Sleep(15);  // let Roblox take the letters before the next click closes the box
+  last_n = g_click_n;
   return true;
 }
 }  // namespace plat
