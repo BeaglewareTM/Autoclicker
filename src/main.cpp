@@ -448,6 +448,7 @@ static void bind_all() {
   });
   W->bind("bc_get_state", [](Args) {
     json j;
+    j["version"] = NYC_VERSION;
     { std::lock_guard<std::mutex> l(CFG.m); j = CFG.to_json_locked(); j["hotkey_name"] = plat::key_name(CFG.hotkey);
       j["killkey_name"] = plat::key_name(CFG.killkey);
       j["key_hot_name"] = plat::key_name(CFG.key_hot);
