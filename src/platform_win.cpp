@@ -12,6 +12,9 @@
 #define NOMINMAX
 #include <windows.h>
 #include <winhttp.h>
+#include <shellapi.h>
+#include <propsys.h>
+#include <shobjidl.h>
 #include <vector>
 #include "json.hpp"
 #include <dwmapi.h>
@@ -78,7 +81,8 @@ HICON icon_from_image(const std::filesystem::path &file, int size) {
     ReleaseDC(nullptr, dc);
     if (!color) goto done;
     if (SUCCEEDED(conv->CopyPixels(nullptr, size * 4, size * size * 4, static_cast<BYTE *>(bits)))) {
-      HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
+      std::vector<BYTE> zeros(((size + 15) / 16) * 2 * size, 0);
+      HBITMAP mask = CreateBitmap(size, size, 1, 1, zeros.data());
       ICONINFO ii{TRUE, 0, 0, mask, color};
       icon = CreateIconIndirect(&ii);
       DeleteObject(mask);
@@ -615,6 +619,25 @@ bool apply_icon(const std::filesystem::path &image) {
     HINSTANCE inst = GetModuleHandleW(nullptr);
     b = (HICON)LoadImageW(inst, MAKEINTRESOURCEW(1), IMAGE_ICON, big, big, 0);
     s = (HICON)LoadImageW(inst, MAKEINTRESOURCEW(1), IMAGE_ICON, small, small, 0);
+  }
+  // If NYC is pinned to the taskbar, Windows shows the pinned shortcut's icon and ignores the
+  // window icon. Giving the window its own app ID while a custom icon is set makes the taskbar
+  // treat it as its own button, which uses the window icon below.
+  {
+    static const PROPERTYKEY AUMID = {{0x9F4C2855, 0x9F79, 0x4B39, {0xA8, 0xD0, 0xE1, 0xD4, 0x2D, 0xE1, 0xD5, 0xF3}}, 5};
+    IPropertyStore *ps = nullptr;
+    if (SUCCEEDED(SHGetPropertyStoreForWindow(g_win, IID_PPV_ARGS(&ps))) && ps) {
+      PROPVARIANT pv;
+      PropVariantInit(&pv);
+      if (custom) {
+        static wchar_t id[] = L"BeaglewareTM.NYC.CustomIcon";
+        pv.vt = VT_LPWSTR;
+        pv.pwszVal = id;
+      }
+      ps->SetValue(AUMID, pv);
+      ps->Commit();
+      ps->Release();
+    }
   }
   SendMessageW(g_win, WM_SETICON, ICON_BIG, (LPARAM)b);
   SendMessageW(g_win, WM_SETICON, ICON_SMALL, (LPARAM)s);
