@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- Inter font: Copyright 2020 The Inter Project Authors, SIL Open Font License 1.1 (https://scripts.sil.org/OFL) -->
+<style>
+@font-face{font-family:'Inter';font-weight:100 900;font-style:normal;src:url('inter.woff2') format('woff2')}
+*{box-sizing:border-box;margin:0;padding:0}
+html{zoom:1.1}
+html,body{background:var(--page,#080808);overflow:hidden;user-select:none;-webkit-user-select:none}
+body{font-family:Inter,"Segoe UI Variable","Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+.bw{--bg:#080808;--pn:#0e0e0e;--bd:#1c1c1c;--fd:#141414;--sel:#1e1e1e;--tx:#fff;--sub:#8f8f8f;--ac:#ff9fcd;--off:#262626;--mn:#141414;
+ position:relative;width:100%;background:var(--bg);color:var(--tx);overflow:hidden;transition:background .25s,color .25s}
+.bar{position:relative;display:flex;align-items:center;justify-content:center;height:52px;border-bottom:1px solid var(--bd)}
+.bar .t{font-size:15px;font-weight:500;pointer-events:none}
+.bar{cursor:default}
+.ctl{position:absolute;right:11px;top:50%;transform:translateY(-50%);display:flex;gap:2px}
+.ctl b{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;color:var(--sub);cursor:pointer;transition:background .15s,color .15s}
+.ctl svg{width:17px;height:17px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.ctl b:hover{background:var(--sel);color:var(--tx)}
+.ctl b.on{color:var(--tx)}
+.ctl b.close:hover{background:#e5484d;color:#fff}
+.view{margin:14px}
+.page{display:none}.page.show{display:block}
+.lft{position:absolute;left:11px;top:50%;transform:translateY(-50%)}
+.lft b{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;color:var(--sub);cursor:pointer;transition:background .15s,color .15s}
+.lft svg{width:17px;height:17px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.lft b:hover,.lft b.on{background:var(--sel);color:var(--tx)}
+.shade{position:absolute;top:52px;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .22s;z-index:8}
+.drawer{position:absolute;top:52px;bottom:0;left:0;width:200px;background:var(--pn);border-right:1px solid var(--bd);transform:translateX(-101%);transition:transform .25s cubic-bezier(.3,.7,.2,1);z-index:9;padding:12px 10px;display:flex;flex-direction:column;gap:2px}
+.bw.open .shade{opacity:1;pointer-events:auto}.bw.open .drawer{transform:none}
+.cat{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:8px;font-size:13.5px;color:var(--sub);cursor:pointer;transition:background .15s,color .15s}
+.cat:hover{background:var(--sel);color:var(--tx)}
+.cat.on{background:var(--sel);color:var(--tx);font-weight:500;box-shadow:inset 0 0 0 1px var(--bd)}
+.cat svg{width:18px;height:18px;flex:none;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.panel{background:var(--pn);border:1px solid var(--bd);border-radius:10px;padding:8px 18px;transition:background .25s}
+.row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;gap:12px}
+.lbl{font-size:13.5px}.sub{font-size:11.5px;color:var(--sub);margin-top:2px}.sub:empty{display:none}
+.seg{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:72px;background:var(--fd);border:1px solid var(--bd);border-radius:10px;padding:3px}
+.seg .ind{position:absolute;top:3px;bottom:3px;left:3px;width:72px;border-radius:7px;background:var(--sel);box-shadow:inset 0 0 0 1px var(--bd);transition:transform .22s cubic-bezier(.3,.7,.2,1)}
+.seg span{position:relative;z-index:1;text-align:center;font-size:12.5px;line-height:30px;color:var(--sub);cursor:pointer;transition:color .2s}
+.seg span:hover{color:var(--tx)}
+.seg span.on{color:var(--tx);font-weight:500}
+.box{background:var(--fd);border:1px solid var(--bd);border-radius:8px;font-size:13px;height:34px;display:flex;align-items:center;justify-content:center;color:var(--tx)}
+.btn{cursor:pointer;transition:background .15s,color .15s}.btn:hover{background:var(--sel);color:var(--tx)}
+.btn:active{transform:scale(.97)}
+.tg{width:40px;height:22px;border-radius:11px;background:var(--off);position:relative;cursor:pointer;transition:background .2s;flex:none}
+.tg i{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--sub);transition:all .2s cubic-bezier(.3,.7,.2,1)}
+.tg.on{background:var(--ac)}.tg.on i{left:21px;background:#fff}
+.reveal{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows .25s cubic-bezier(.3,.7,.2,1),opacity .2s}
+.reveal.show{grid-template-rows:1fr;opacity:1}
+.reveal>div{overflow:hidden;min-height:0}
+.step{display:flex;gap:6px}
+.step .m{width:34px;color:var(--sub);font-size:15px}
+.step .v{width:96px;gap:5px;font-weight:600}
+.step .v input{width:3ch;background:none;border:none;outline:none;color:var(--tx);font:600 13px Inter,"Segoe UI",sans-serif;text-align:center;font-variant-numeric:tabular-nums;user-select:text;-webkit-user-select:text}
+.step .v em{font-style:normal;font-weight:400;font-size:11.5px;color:var(--sub);min-width:0}
+.wide{width:176px;font-weight:600}
+.wide.wait{color:var(--ac)}
+.plist{background:var(--fd);border:1px solid var(--bd);border-radius:9px;padding:4px;margin-bottom:8px}
+.pos{display:flex;align-items:center;gap:14px;height:36px;padding:0 4px 0 8px;border-radius:6px;font-size:13px;transition:background .15s}
+.pos:hover{background:var(--sel)}
+.pos .n{width:22px;height:22px;border-radius:50%;background:var(--sel);box-shadow:inset 0 0 0 1px var(--bd);color:var(--sub);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex:none}
+.pos .c{flex:1;font-variant-numeric:tabular-nums;font-weight:500}
+.pos .c em{font-style:normal;font-weight:400;color:var(--sub);font-size:11.5px;margin-right:5px}
+.pos .c span{display:inline-block;min-width:78px}
+.pos .x{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--sub);cursor:pointer;transition:all .15s}
+.pos .x:hover{background:var(--bg);color:var(--tx)}
+.empty{font-size:11.5px;color:var(--sub);text-align:center;padding:12px 0}
+.ico{width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.dd{position:relative;width:176px}
+.dd .cur{display:flex;align-items:center;justify-content:space-between;padding:0 12px;height:34px;background:var(--fd);border:1px solid var(--bd);border-radius:8px;font-size:13px;cursor:pointer;transition:background .15s}
+.dd .cur:hover{background:var(--sel)}
+.dd .cur svg{color:var(--sub);transition:transform .2s}.dd.open .cur svg{transform:rotate(180deg)}
+.dd .menu{position:absolute;top:38px;left:0;right:0;max-height:250px;overflow-y:auto;background:var(--mn);border:1px solid var(--bd);border-radius:8px;padding:4px;z-index:5;opacity:0;transform:translateY(-4px);transition:opacity .15s,transform .15s;pointer-events:none}
+.dd .menu::-webkit-scrollbar{width:6px}.dd .menu::-webkit-scrollbar-thumb{background:var(--sel);border-radius:3px}
+.dd.open .menu{opacity:1;transform:none;pointer-events:auto}
+.dd .opt{padding:7px 10px;border-radius:6px;font-size:12.5px;cursor:pointer;color:var(--sub)}
+.dd .opt:hover{background:var(--sel);color:var(--tx)}
+.dd .opt.on{color:var(--tx);font-weight:500}
+#ddspace{height:0;transition:height .18s cubic-bezier(.3,.7,.2,1)}
+.notrans,.notrans *,.notrans *::before,.notrans *::after{transition:none!important}
+.stt{font-size:12px;font-weight:500;color:var(--sub);transition:color .2s}
+.stt.run{color:var(--ac)}
+</style>
+</head>
+<body>
+<div class="bw" id="win">
+ <div class="bar" id="bar"><div class="lft"><b id="menubtn" title="Menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></b></div><span class="t" id="ttl">NYC</span>
+  <div class="ctl">
+   <b id="min" title="Minimize"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></b>
+   <b id="cls" class="close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></b>
+  </div></div>
+ <div class="view">
+  <div class="page show" data-p="clicker" data-t="NYC"><div class="panel">
+   <div class="row"><div><div class="lbl">Auto clicker</div><div class="sub" id="hint"></div></div>
+    <div style="display:flex;align-items:center;gap:12px"><span class="stt" id="st">Stopped</span><div class="tg" id="armed"><i></i></div></div></div>
+   <div class="row"><div><div class="lbl">Click speed</div><div class="sub">Clicks per second</div></div>
+    <div class="step" data-key="cps" data-min="1" data-max="1000" data-step="1" data-dec="1"><div class="box btn m">−</div><div class="box v"><input><em>cps</em></div><div class="box btn m">+</div></div></div>
+   <div class="row"><div><div class="lbl">Mouse button</div><div class="sub">Which button to click</div></div>
+    <div class="seg" data-key="button"><div class="ind"></div><span>Left</span><span>Right</span><span>Middle</span></div></div>
+   <div class="row"><div><div class="lbl">Click type</div><div class="sub" id="ctsub">One click each time</div></div>
+    <div class="seg" data-key="ctype"><div class="ind"></div><span>Single</span><span>Double</span><span>Multi</span></div></div>
+   <div class="reveal" id="multi"><div>
+    <div class="row"><div><div class="lbl">Delay between spots</div><div class="sub">Wait before the next spot</div></div>
+     <div class="step" data-key="pos_delay" data-min="0" data-max="10000" data-step="5" data-dec="0"><div class="box btn m">−</div><div class="box v"><input><em>ms</em></div><div class="box btn m">+</div></div></div>
+    <div class="plist" id="plist"></div>
+    <div style="display:flex;gap:8px;padding:0 0 10px">
+     <div class="box btn" id="add" style="flex:1;gap:6px"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span id="addt">Add position</span></div>
+     <div class="box btn" id="clr" style="flex:1;color:var(--sub)">Clear all</div></div>
+   </div></div>
+   <div class="row"><div><div class="lbl">Activation</div><div class="sub" id="actsub">Press once to start and stop</div></div>
+    <div class="seg" data-key="mode"><div class="ind"></div><span>Toggle</span><span>Hold</span><span>Burst</span></div></div>
+   <div class="reveal" id="burst"><div>
+    <div class="row"><div><div class="lbl">Burst size</div><div class="sub">Clicks fired per hotkey press</div></div>
+     <div class="step" data-key="burst" data-min="1" data-max="10000" data-step="1" data-dec="0"><div class="box btn m">−</div><div class="box v"><input></div><div class="box btn m">+</div></div></div>
+   </div></div>
+   <div class="row"><div><div class="lbl">Hotkey</div><div class="sub">Key that starts and stops</div></div><div class="box btn wide" data-bind="hotkey">F6</div></div>
+  </div></div>
+  <div class="page" data-p="keys" data-t="Key Macro"><div class="panel">
+   <div class="row"><div><div class="lbl">Key macro</div><div class="sub" id="khint">Turn on to use the hotkey</div></div>
+    <div style="display:flex;align-items:center;gap:12px"><span class="stt" id="kst">Stopped</span><div class="tg" id="karmed"><i></i></div></div></div>
+   <div class="row"><div><div class="lbl">Key to press</div><div class="sub">The key it spams for you</div></div><div class="box btn wide" data-bind="key_target">Not set</div></div>
+   <div class="row"><div><div class="lbl">Press delay</div><div class="sub" id="kdsub">Wait between presses</div></div>
+    <div class="step" data-key="key_delay" data-min="0.01" data-max="10000" data-step="10" data-dec="2" data-trim="1"><div class="box btn m">−</div><div class="box v"><input><em>ms</em></div><div class="box btn m">+</div></div></div>
+   <div class="row"><div><div class="lbl">Activation</div><div class="sub" id="kactsub">Press once to start and stop</div></div>
+    <div class="seg" data-key="key_mode"><div class="ind"></div><span>Toggle</span><span>Hold</span><span>Burst</span></div></div>
+   <div class="reveal" id="kburst"><div>
+    <div class="row"><div><div class="lbl">Burst size</div><div class="sub">Presses fired per hotkey press</div></div>
+     <div class="step" data-key="key_burst" data-min="1" data-max="10000" data-step="1" data-dec="0"><div class="box btn m">−</div><div class="box v"><input></div><div class="box btn m">+</div></div></div>
+   </div></div>
+   <div class="row"><div><div class="lbl">Hotkey</div><div class="sub">Key that starts and stops</div></div><div class="box btn wide" data-bind="key_hot">F7</div></div>
+  </div></div>
+  <div class="page" data-p="settings" data-t="Settings"><div class="panel">
+   <div class="row"><div><div class="lbl">Theme</div><div class="sub">Colors of the app</div></div>
+    <div class="dd" id="dd"><div class="cur" id="cur"><span id="curtxt">Dark</span><svg class="ico" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></div><div class="menu" id="menu"></div></div></div>
+   <div class="row"><div><div class="lbl">Icon</div><div class="sub" id="iconsub">Default icon</div></div>
+    <div style="display:flex;gap:6px"><div class="box btn" id="iconreset" style="width:70px;color:var(--sub)">Reset</div><div class="box btn" id="iconpick" style="width:100px;font-weight:600">Choose</div></div></div>
+   <div class="row"><div><div class="lbl">Always on top</div><div class="sub">Stays above other windows</div></div><div class="tg" id="ontop"><i></i></div></div>
+   <div class="row"><div><div class="lbl">Killswitch</div><div class="sub">Stops everything instantly</div></div><div class="box btn wide" data-bind="killkey">Insert</div></div>
+   <div class="row"><div><div class="lbl">Backup</div><div class="sub" id="bksub">Save or load all your settings</div></div>
+    <div style="display:flex;gap:6px"><div class="box btn" id="bkimport" style="width:70px;color:var(--sub)">Import</div><div class="box btn" id="bkexport" style="width:100px;font-weight:600">Export</div></div></div>
+  </div></div>
+ </div>
+ <div id="ddspace"></div>
+ <div class="shade" id="shade"></div>
+ <div class="drawer" id="drawer">
+  <div class="cat on" data-p="clicker"><svg viewBox="0 0 24 24"><path d="M9.5 9.5l10 3.8-4.3 1.6-1.6 4.3z"/><path d="M5 5l1.6 1.6M9.5 3v2.3M3 9.5h2.3M5.3 13.8l1.6-1.6"/></svg>Clicker</div>
+  <div class="cat" data-p="keys"><svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12.5" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M6.5 13.5h.01M17.5 13.5h.01M9.5 14.5h5"/></svg>Key Macro</div>
+  <div style="flex:1"></div>
+  <div class="cat" data-p="settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Settings</div>
+ </div>
+</div>
+<script>
+const $=id=>document.getElementById(id), win=$('win');
+function d(bg,pn,bd,fd,sel,tx,sub,ac,off){return{bg,pn,bd,fd,sel,tx,sub,ac,off}}
+const T={
+Dark:d('#080808','#0e0e0e','#1c1c1c','#141414','#1e1e1e','#ffffff','#8f8f8f','#ff9fcd','#262626'),
+Light:d('#f4f4f5','#ffffff','#e2e2e5','#f4f4f5','#e8e8eb','#111113','#6b6b73','#ff6fae','#d4d4d8'),
+Transparent:d('#0b0b0b','rgba(255,255,255,.05)','rgba(255,255,255,.14)','rgba(255,255,255,.07)','rgba(255,255,255,.16)','#ffffff','#d0d0d0','#ff9fcd','rgba(255,255,255,.2)'),
+Midnight:d('#05060d','#0a0c18','#181b2e','#0f1222','#1a1e36','#eef0ff','#868bb0','#8b9cff','#20243d'),
+Rose:d('#120a0e','#1a0f15','#2c1a24','#21131b','#2e1925','#ffe9f3','#b08a9c','#ff7eb9','#3a2430'),
+Sakura:d('#fff5f8','#ffffff','#f6dbe5','#fdeef3','#fae1ea','#3a1424','#a0687e','#ff7eb9','#f0cfdb'),
+Crimson:d('#0e0606','#160a0a','#2b1414','#1d0d0d','#2a1212','#ffeaea','#b08787','#ff5a5f','#381a1a'),
+Sunset:d('#120c08','#1a120c','#2e2016','#21170f','#2e2015','#fff1e6','#b39a86','#ffa86b','#3a2a1d'),
+Gold:d('#0e0c06','#16130a','#2a2414','#1d190d','#2a2412','#fff8e1','#b3a67f','#ffd166','#363019'),
+Coffee:d('#110d0a','#19130f','#2d231c','#211913','#2e231b','#f6ebe1','#a8958a','#d4a373','#3a2d24'),
+Forest:d('#08100b','#0d1811','#1a2d20','#112017','#182c1f','#e8f7ec','#87a690','#6ee7a8','#203628'),
+Matcha:d('#f3f7ef','#ffffff','#dde8d4','#eef4e8','#e3edd9','#1d2a16','#6f8263','#7fb069','#cfdcc4'),
+Mint:d('#061210','#0a1a17','#163029','#0f221e','#16302a','#e6fff9','#83aaa1','#5eead4','#1d3a33'),
+Ocean:d('#071018','#0b1722','#16283a','#0f1e2c','#16293b','#e6f3ff','#7f9bb3','#5cc8ff','#1d3247'),
+Ice:d('#f1f7fb','#ffffff','#d9e7f1','#eaf3f9','#dceaf4','#0f2230','#5f7a8d','#38bdf8','#c9dbe7'),
+Lavender:d('#0d0b14','#13101d','#252036','#1a1628','#241f37','#f1ecff','#9a92b5','#c9b6ff','#2e2844'),
+Grape:d('#0d0612','#150a1c','#2a1636','#1d0e27','#2a1538','#f6e8ff','#a487b5','#b56cff','#371d46'),
+Neon:d('#050505','#0b0b0b','#1a1a1a','#111111','#1b1b1b','#f2fff7','#86a392','#39ff88','#232323'),
+Mono:d('#0a0a0a','#111111','#222222','#171717','#222222','#f5f5f5','#8a8a8a','#e5e5e5','#2a2a2a')};
+const DESC={ctype:['One click each time','Two clicks each time','Clicks saved spots in order'],
+            mode:['Press once to start and stop','Clicks while you hold the key','Fires a set number of clicks'],
+            key_mode:['Press once to start and stop','Presses while you hold the key','Fires a set number of presses']};
+let S={}, picking=false, binding=null;
+function delayHint(){const v=+S.key_delay;const per=1000/v;
+  $('kdsub').textContent=v<10?'Capped at 100 per second':'Wait between presses, about '+(per>=10?Math.round(per):per.toFixed(1))+' per second';}
+const API_NAMES=['get_state','set','ready','resize','minimize','close','start_bind','cancel_bind','start_pick','cancel_pick','remove_pos','clear_pos','drag_begin','drag_to','choose_icon','reset_icon','export_settings','import_settings'];
+const api={};API_NAMES.forEach(n=>api[n]=(...a)=>window['bc_'+n](...a));
+const call=(fn,...a)=>{try{return api[fn](...a);}catch(e){}};
+document.addEventListener('contextmenu',e=>e.preventDefault());
+window._mouseDown=false;
+window.addEventListener('pointerdown',e=>{if(e.button===0)window._mouseDown=true;},true);
+window.addEventListener('pointerup',()=>window._mouseDown=false,true);
+window.addEventListener('blur',()=>window._mouseDown=false);
+
+/* ---------- window height follows content ---------- */
+let lastH=0;
+const ZOOM=1.1;
+function winH(){return win.getBoundingClientRect().height;}
+function fit(){const h=Math.ceil(winH());if(h!==lastH){lastH=h;call('resize',h);}}
+// The window follows the content's real height every frame (including while rows slide open or
+// closed), so it never cuts content off or leaves an empty gap.
+let booted=false,trackUntil=0,trackRaf=0;
+function track(ms){trackUntil=Math.max(trackUntil,performance.now()+ms);
+  if(!trackRaf){const step=()=>{fit();if(performance.now()<trackUntil)trackRaf=requestAnimationFrame(step);else{trackRaf=0;fit();}};trackRaf=requestAnimationFrame(step);}}
+function reveal(el,show){if(el.classList.contains('show')===show)return;el.classList.toggle('show',show);if(booted)track(320);}
+
+/* ---------- theme ---------- */
+const menu=$('menu'),dd=$('dd');
+function openDD(o){
+  if(dd.classList.contains('open')===o)return;
+  const sp=$('ddspace');
+  if(o){
+    const o1=menu.querySelector('.opt');
+    if(o1)menu.style.maxHeight=(o1.offsetHeight*5+10)+'px'; // show exactly 5 themes, scroll for the rest
+    dd.classList.add('open');
+    const on=menu.querySelector('.on');if(on)on.scrollIntoView({block:'nearest'});
+    // grow the window just enough that the whole list is inside it (plus the normal 14px margin)
+    const need=(menu.getBoundingClientRect().top+menu.offsetHeight*ZOOM+14*ZOOM)-(winH()-sp.getBoundingClientRect().height);
+    sp.style.height=Math.max(0,Math.ceil(need/ZOOM))+'px';
+  }else{dd.classList.remove('open');sp.style.height='0px';}
+  if(booted)track(260);}
+document.addEventListener('click',e=>{if(!dd.contains(e.target))openDD(false);});
+function applyTheme(n){if(!T[n])n='Dark';const t=T[n];const root=document.documentElement;root.classList.add('notrans');for(const k in t)win.style.setProperty('--'+k,t[k]);
+  win.style.setProperty('--mn',n==='Transparent'?'rgba(20,20,20,.96)':t.fd);
+  document.documentElement.style.setProperty('--page',n==='Transparent'?'#080808':t.bg);$('curtxt').textContent=n;[...menu.children].forEach(o=>o.classList.toggle('on',o.dataset.n===n));
+  void root.offsetHeight;requestAnimationFrame(()=>requestAnimationFrame(()=>root.classList.remove('notrans')));}
+for(const n in T){const o=document.createElement('div');o.className='opt';o.dataset.n=n;o.textContent=n;
+  o.onclick=e=>{e.stopPropagation();applyTheme(n);S.theme=n;call('set','theme',n);openDD(false);};menu.appendChild(o);}
+$('cur').onclick=e=>{e.stopPropagation();openDD(!dd.classList.contains('open'));};
+
+/* ---------- segmented ---------- */
+function segSet(seg,val,fire){const opts=[...seg.querySelectorAll('span')];let i=opts.findIndex(o=>o.textContent===val);if(i<0)i=0;
+  opts.forEach((o,j)=>o.classList.toggle('on',j===i));seg.querySelector('.ind').style.transform='translateX('+(i*100)+'%)';
+  const k=seg.dataset.key;
+  if(k==='ctype'){$('ctsub').textContent=DESC.ctype[i];reveal($('multi'),i===2);}
+  if(k==='mode'){$('actsub').textContent=DESC.mode[i];reveal($('burst'),i===2);}
+  if(k==='key_mode'){$('kactsub').textContent=DESC.key_mode[i];reveal($('kburst'),i===2);}
+  if(fire){S[k]=opts[i].textContent;call('set',k,S[k]);}}
+document.querySelectorAll('.seg').forEach(seg=>seg.querySelectorAll('span').forEach(o=>o.onclick=()=>{if(!picking)segSet(seg,o.textContent,true);}));
+
+/* ---------- steppers (click, hold to repeat, type, scroll) ---------- */
+document.querySelectorAll('.step').forEach(st=>{
+  const k=st.dataset.key,lo=+st.dataset.min,hi=+st.dataset.max,stp=+st.dataset.step,dec=+st.dataset.dec,inp=st.querySelector('input');
+  const [mi,pl]=st.querySelectorAll('.m');
+  const size=()=>inp.style.width=Math.max(1,inp.value.length)+0.2+'ch';
+  const fmtv=v=>st.dataset.trim?String(+(+v).toFixed(dec)):(+v).toFixed(dec);
+  const show=()=>{inp.value=fmtv(S[k]);size();if(k==='key_delay')delayHint();};
+  const setv=v=>{v=Math.min(hi,Math.max(lo,+(+v).toFixed(dec)));if(isNaN(v))v=+S[k];S[k]=v;show();call('set',k,v);};
+  st._show=show;
+  // Hold to repeat. Only ONE timer can exist, and any release anywhere stops it.
+  let t1=0,t2=0;
+  const stopRep=()=>{clearTimeout(t1);clearInterval(t2);t1=t2=0;};
+  const rep=(e,dir)=>{if(e.button!==0||picking)return;e.preventDefault();stopRep();setv(+S[k]+dir*stp);
+    t1=setTimeout(()=>{t1=0;t2=setInterval(()=>{if(!(window._mouseDown))return stopRep();setv(+S[k]+dir*stp);},45);},380);};
+  mi.onpointerdown=e=>rep(e,-1);pl.onpointerdown=e=>rep(e,1);
+  [mi,pl].forEach(b=>{b.onpointerleave=stopRep;b.onpointercancel=stopRep;});
+  window.addEventListener('pointerup',stopRep);window.addEventListener('blur',stopRep);
+  inp.onkeydown=e=>{if(e.key==='Enter')inp.blur();if(e.key==='Escape'){show();inp.blur();}};
+  inp.onblur=()=>setv(inp.value);
+  inp.oninput=()=>{inp.value=inp.value.replace(/[^0-9.]/g,'').slice(0,7);size();};
+  st.querySelector('.v').onwheel=e=>{e.preventDefault();setv(+S[k]+(e.deltaY<0?1:-1)*stp);};
+});
+
+/* ---------- toggles ---------- */
+$('armed').onclick=()=>{if(picking)return;S.armed=!S.armed;setArmed(S.armed);call('set','armed',S.armed);};
+$('ontop').onclick=()=>{S.on_top=!S.on_top;$('ontop').classList.toggle('on',S.on_top);call('set','on_top',S.on_top);};
+function setArmed(on){S.armed=on;$('armed').classList.toggle('on',on);
+  if(S.perm===false){$('hint').textContent='Allow Accessibility in System Settings';return;}
+  $('hint').textContent='';}  // no description under Auto clicker (only the Mac permission notice uses it)
+function setKArmed(on){S.key_on=on;$('karmed').classList.toggle('on',on);
+  if(S.perm===false){$('khint').textContent='Allow Accessibility in System Settings';return;}
+  $('khint').textContent=!on?'Turn on to use the hotkey':S.key_target_name==='Not set'?'Choose a key to press below':
+    S.key_hot_name==='Not set'?'Set a hotkey below':'Press '+S.key_hot_name+' to start';}
+$('karmed').onclick=()=>{if(picking)return;S.key_on=!S.key_on;setKArmed(S.key_on);call('set','key_on',S.key_on);};
+
+/* ---------- key binding ---------- */
+document.querySelectorAll('[data-bind]').forEach(b=>b.onclick=()=>{
+  if(picking)return;
+  if(binding){const ob=document.querySelector('[data-bind="'+binding+'"]');ob.classList.remove('wait');ob.textContent=S[binding+'_name'];}
+  if(binding===b.dataset.bind){binding=null;call('cancel_bind');return;}
+  binding=b.dataset.bind;b.classList.add('wait');b.textContent='Press a key';call('start_bind',binding);});
+window.onBind=(key,name)=>{const b=document.querySelector('[data-bind="'+key+'"]');binding=null;
+  if(!b)return;b.classList.remove('wait');S[key+'_name']=name;b.textContent=name;if(key==='hotkey')setArmed(S.armed);if(key==='key_hot'||key==='key_target')setKArmed(S.key_on);};
+
+/* ---------- multi positions ---------- */
+const pl=$('plist'),add=$('add'),addt=$('addt');
+function drawPos(list){const before=winH();S.positions=list;pl.innerHTML='';
+  if(!list.length)pl.innerHTML='<div class="empty">No spots yet. Press Add position, then click anywhere</div>';
+  list.forEach((p,i)=>{const r=document.createElement('div');r.className='pos';
+    r.innerHTML='<span class="n">'+(i+1)+'</span><span class="c"><span><em>X</em>'+p[0]+'</span><span><em>Y</em>'+p[1]+'</span></span><span class="x" title="Remove"><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span>';
+    r.querySelector('.x').onclick=()=>{if(!picking)call('remove_pos',i);};pl.appendChild(r);});
+  if($('multi').classList.contains('show')&&winH()!==before)fit();}
+function endPick(){picking=false;addt.textContent='Add position';add.style.color='';}
+add.onclick=()=>{if(picking){call('cancel_pick');endPick();return;}picking=true;addt.textContent='Click anywhere';add.style.color='var(--ac)';call('start_pick');};
+$('clr').onclick=()=>{if(!picking)call('clear_pos');};
+window.onPositions=list=>{endPick();drawPos(list);};
+window.onPickCancel=()=>endPick();
+
+/* ---------- status from engine ---------- */
+window.onRunning=(which,on)=>{const s=$(which==='key'?'kst':'st');s.textContent=on?'Running':'Stopped';s.classList.toggle('run',on);};
+window.onKilled=()=>{setArmed(false);setKArmed(false);window.onRunning('click',false);window.onRunning('key',false);};
+
+/* ---------- custom icon ---------- */
+let iconMsgT=0;
+function showIcon(msg){clearTimeout(iconMsgT);$('iconsub').textContent=msg||(S.custom_icon?'Custom image':'Default icon');
+  if(msg)iconMsgT=setTimeout(()=>showIcon(),2500);}
+$('iconpick').onclick=async()=>{if(picking)return;const r=await call('choose_icon');
+  if(r&&r.changed){S.custom_icon=true;showIcon();}else if(r&&r.error)showIcon("Couldn't use that image");};
+$('iconreset').onclick=async()=>{await call('reset_icon');S.custom_icon=false;showIcon();};
+
+/* ---------- backup ---------- */
+let bkT=0;
+function bkMsg(m){clearTimeout(bkT);$('bksub').textContent=m;bkT=setTimeout(()=>$('bksub').textContent='Save or load all your settings',2500);}
+$('bkexport').onclick=async()=>{if(picking)return;const r=await call('export_settings');
+  if(r&&r.done)bkMsg(r.ok?'Settings exported':"Couldn't save the file");};
+$('bkimport').onclick=async()=>{if(picking)return;const r=await call('import_settings');
+  if(!r||!r.done)return;
+  if(!r.ok){bkMsg("That isn't an NYC settings file");return;}
+  S=await api.get_state();applyAll();fit();bkMsg('Settings imported');};
+
+/* ---------- title buttons ---------- */
+const drawerOpen=o=>{win.classList.toggle('open',o);$('menubtn').classList.toggle('on',o);};
+$('menubtn').onclick=e=>{e.stopPropagation();if(picking)return;drawerOpen(!win.classList.contains('open'));};
+$('shade').onclick=()=>drawerOpen(false);
+function showPage(p){document.querySelectorAll('.page').forEach(x=>x.classList.toggle('show',x.dataset.p===p));
+  document.querySelectorAll('.cat').forEach(x=>x.classList.toggle('on',x.dataset.p===p));
+  $('ttl').textContent=document.querySelector('.page[data-p="'+p+'"]').dataset.t;openDD(false);fit();}
+document.querySelectorAll('.cat').forEach(c=>c.onclick=()=>{showPage(c.dataset.p);drawerOpen(false);});
+$('min').onclick=()=>call('minimize');
+$('cls').onclick=()=>call('close');
+
+/* ---------- window dragging (pointer capture keeps it smooth outside the window) ---------- */
+(()=>{const bar=$('bar');let drag=null,raf=0,last=null;
+  bar.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('.ctl')||e.target.closest('.lft'))return;
+    drag={x:e.screenX,y:e.screenY};bar.setPointerCapture(e.pointerId);call('drag_begin');});
+  bar.addEventListener('pointermove',e=>{if(!drag)return;last=[Math.round(e.screenX-drag.x),Math.round(e.screenY-drag.y)];
+    if(!raf)raf=requestAnimationFrame(()=>{raf=0;if(last)call('drag_to',last[0],last[1]);});});
+  const end=e=>{if(!drag)return;drag=null;try{bar.releasePointerCapture(e.pointerId);}catch(_){}};
+  bar.addEventListener('pointerup',end);bar.addEventListener('pointercancel',end);})();
+
+/* ---------- macOS permission notice ---------- */
+window.onPerm=ok=>{S.perm=ok;setArmed(!!S.armed);setKArmed(!!S.key_on);};
+
+/* ---------- boot ---------- */
+function applyAll(){
+  applyTheme(S.theme);
+  document.querySelectorAll('.step').forEach(st=>st._show());
+  document.querySelectorAll('.reveal').forEach(r=>r.style.transition='none');
+  document.querySelectorAll('.seg').forEach(seg=>segSet(seg,S[seg.dataset.key],false));
+  document.querySelectorAll('[data-bind]').forEach(b=>b.textContent=S[b.dataset.bind+'_name']);
+  $('ontop').classList.toggle('on',!!S.on_top);
+  showIcon();
+  setArmed(!!S.armed);
+  setKArmed(!!S.key_on);
+  drawPos(S.positions||[]);
+  ['st','kst'].forEach(id=>{$(id).textContent='Stopped';$(id).classList.remove('run');});
+  void win.offsetHeight;
+  document.querySelectorAll('.reveal').forEach(r=>r.style.transition='');
+}
+async function boot(){
+  S=await api.get_state();
+  applyAll();
+  try{await document.fonts.ready;}catch(e){}
+  void win.offsetHeight;
+  document.querySelectorAll('.reveal').forEach(r=>r.style.transition='');
+  lastH=Math.ceil(winH());
+  await api.ready(lastH);
+  booted=true;
+  requestAnimationFrame(()=>win.classList.add('ready'));
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+</script>
+</body>
+</html>
