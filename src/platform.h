@@ -65,6 +65,13 @@ bool apply_icon(const std::filesystem::path &image);
 void show_error(const std::string &msg);
 [[noreturn]] void quit_now();
 
+// "Type while clicking": while on, keys typed into the game are held back and replayed into
+// Roblox chat between clicks (press / to open chat, type them, then clicking continues).
+// keep = key ids that must never be held back (the hotkeys).
+void chat_relay(bool on, const std::vector<std::string> &keep);
+// Called by the click engine before each click. Types anything waiting; false if nothing was waiting.
+bool chat_flush();
+
 // Auto update. update_fetch() checks GitHub releases of `repo` ("owner/name") for a version
 // newer than `current`; if there is one it downloads the asset NYC.exe next to the running exe
 // and returns true. Runs on a background thread, never throws. Returns false on Mac / no internet.

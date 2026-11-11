@@ -765,3 +765,123 @@ void update_install_and_restart() {
   quit_now();
 }
 }  // namespace plat
+
+// ---------------------------------------------------------------- type while clicking
+namespace plat {
+namespace {
+struct ChatKey { wchar_t ch; WORD vk; };  // ch for text, vk for Enter / Backspace
+std::mutex g_chat_m;
+std::vector<ChatKey> g_chat_q;
+std::vector<WORD> g_chat_keep;
+bool g_chat_swallowed[256];
+std::atomic<bool> g_chat_on{false};
+std::thread g_chat_th;
+DWORD g_chat_tid = 0;
+
+LRESULT CALLBACK chat_hook(int code, WPARAM wp, LPARAM lp) {
+  if (code == HC_ACTION && g_chat_on) {
+    auto *k = reinterpret_cast<KBDLLHOOKSTRUCT *>(lp);
+    WORD vk = (WORD)k->vkCode;
+    bool down = wp == WM_KEYDOWN || wp == WM_SYSKEYDOWN;
+    bool up = wp == WM_KEYUP || wp == WM_SYSKEYUP;
+    if (!(k->flags & LLKHF_INJECTED) && vk < 256) {
+      if (up && g_chat_swallowed[vk]) { g_chat_swallowed[vk] = false; return 1; }
+      if (down && GetForegroundWindow() != g_win) {
+        bool keep = vk == VK_OEM_2 || vk == VK_ESCAPE;  // "/" and Esc go straight to Roblox
+        {
+          std::lock_guard<std::mutex> l(g_chat_m);
+          for (WORD w : g_chat_keep) keep = keep || w == vk;
+        }
+        bool mod = (GetAsyncKeyState(VK_CONTROL) | GetAsyncKeyState(VK_MENU) | GetAsyncKeyState(VK_LWIN) |
+                    GetAsyncKeyState(VK_RWIN)) & 0x8000;
+        if (!keep && !mod) {
+          ChatKey ck{0, 0};
+          if (vk == VK_RETURN || vk == VK_BACK) ck.vk = vk;
+          else {
+            BYTE st[256]{};
+            if (GetAsyncKeyState(VK_SHIFT) & 0x8000) st[VK_SHIFT] = 0x80;
+            if (GetKeyState(VK_CAPITAL) & 1) st[VK_CAPITAL] = 1;
+            wchar_t buf[4];
+            int n = ToUnicodeEx(vk, k->scanCode, st, buf, 4, 4 /*don't change keyboard state*/, GetKeyboardLayout(0));
+            if (n == 1 && buf[0] >= 32) ck.ch = buf[0];
+          }
+          if (ck.ch || ck.vk) {
+            { std::lock_guard<std::mutex> l(g_chat_m); g_chat_q.push_back(ck); }
+            g_chat_swallowed[vk] = true;
+            return 1;  // keep it away from the game; it's typed into chat between clicks
+          }
+        }
+      }
+    }
+  }
+  return CallNextHookEx(nullptr, code, wp, lp);
+}
+
+void send_vk(WORD vk) {
+  INPUT in[2]{};
+  UINT sc = MapVirtualKeyW(vk, MAPVK_VK_TO_VSC);
+  for (int i = 0; i < 2; ++i) {
+    in[i].type = INPUT_KEYBOARD;
+    in[i].ki.wVk = vk;
+    in[i].ki.wScan = (WORD)sc;
+    if (i) in[i].ki.dwFlags = KEYEVENTF_KEYUP;
+  }
+  SendInput(2, in, sizeof(INPUT));
+}
+void send_char(wchar_t ch) {
+  INPUT in[2]{};
+  for (int i = 0; i < 2; ++i) {
+    in[i].type = INPUT_KEYBOARD;
+    in[i].ki.wScan = ch;
+    in[i].ki.dwFlags = KEYEVENTF_UNICODE | (i ? KEYEVENTF_KEYUP : 0);
+  }
+  SendInput(2, in, sizeof(INPUT));
+}
+WORD vk_of(const std::string &id) { return id.rfind("vk:", 0) == 0 ? (WORD)atoi(id.c_str() + 3) : 0; }
+}  // namespace
+
+void chat_relay(bool on, const std::vector<std::string> &keep) {
+  {
+    std::lock_guard<std::mutex> l(g_chat_m);
+    g_chat_keep.clear();
+    for (auto &k : keep) if (WORD v = vk_of(k)) g_chat_keep.push_back(v);
+    if (!on) g_chat_q.clear();
+  }
+  if (on == g_chat_on) return;
+  if (on) {
+    g_chat_on = true;
+    std::atomic<DWORD> tid{0};
+    g_chat_th = std::thread([&tid] {
+      MSG m;
+      PeekMessageW(&m, nullptr, 0, 0, PM_NOREMOVE);  // create the message queue
+      HHOOK h = SetWindowsHookExW(WH_KEYBOARD_LL, chat_hook, GetModuleHandleW(nullptr), 0);
+      SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);  // hook must answer fast
+      tid = GetCurrentThreadId();
+      while (GetMessageW(&m, nullptr, 0, 0) > 0) {}
+      if (h) UnhookWindowsHookEx(h);
+    });
+    while (!tid) std::this_thread::yield();
+    g_chat_tid = tid;
+  } else {
+    g_chat_on = false;
+    PostThreadMessageW(g_chat_tid, WM_QUIT, 0, 0);
+    if (g_chat_th.joinable()) g_chat_th.join();
+    for (bool &b : g_chat_swallowed) b = false;
+  }
+}
+
+bool chat_flush() {
+  std::vector<ChatKey> q;
+  { std::lock_guard<std::mutex> l(g_chat_m); q.swap(g_chat_q); }
+  if (q.empty()) return false;
+  if (GetForegroundWindow() == g_win) return true;
+  send_vk(VK_OEM_2);  // "/" opens Roblox chat (it puts the cursor back in the box, text kept)
+  Sleep(35);          // Roblox needs a frame or two before the chat box takes letters
+  for (auto &k : q) {
+    if (k.vk) send_vk(k.vk);
+    else send_char(k.ch);
+  }
+  Sleep(15);  // let Roblox take the letters before the next click closes the box
+  return true;
+}
+}  // namespace plat

@@ -52,6 +52,7 @@ struct Settings {
   std::vector<std::pair<int, int>> positions;
   std::string hotkey, killkey, theme = "Dark";
   bool on_top = false;
+  bool chat_type = false;  // Type while clicking
   bool custom_icon = false;
   // Key Macro
   bool key_on = false;
@@ -97,7 +98,7 @@ struct Settings {
           };
           get("armed", armed); get("cps", cps); get("button", button); get("ctype", ctype);
           get("mode", mode); get("pos_delay", pos_delay); get("burst", burst);
-          get("hotkey", hotkey); get("killkey", killkey); get("theme", theme); get("on_top", on_top); get("custom_icon", custom_icon);
+          get("hotkey", hotkey); get("killkey", killkey); get("theme", theme); get("on_top", on_top); get("chat_type", chat_type); get("custom_icon", custom_icon);
           get("key_on", key_on); get("key_target", key_target); get("key_hot", key_hot); get("key_mode", key_mode);
           get("key_delay", key_delay); get("key_burst", key_burst);
           if (j.contains("positions") && j["positions"].is_array()) {
@@ -116,7 +117,7 @@ struct Settings {
   void copy_from(const Settings &o) {
     armed = o.armed; cps = o.cps; button = o.button; ctype = o.ctype; mode = o.mode;
     pos_delay = o.pos_delay; burst = o.burst; positions = o.positions; hotkey = o.hotkey; killkey = o.killkey;
-    theme = o.theme; on_top = o.on_top; custom_icon = o.custom_icon; key_on = o.key_on;
+    theme = o.theme; on_top = o.on_top; chat_type = o.chat_type; custom_icon = o.custom_icon; key_on = o.key_on;
     key_target = o.key_target; key_hot = o.key_hot; key_mode = o.key_mode; key_delay = o.key_delay;
     key_burst = o.key_burst;
   }
@@ -126,7 +127,7 @@ struct Settings {
     for (auto &p : positions) pos.push_back({p.first, p.second});
     return {{"armed", armed}, {"cps", cps}, {"button", button}, {"ctype", ctype}, {"mode", mode},
             {"pos_delay", pos_delay}, {"burst", burst}, {"positions", pos}, {"hotkey", hotkey},
-            {"killkey", killkey}, {"theme", theme}, {"on_top", on_top}, {"custom_icon", custom_icon},
+            {"killkey", killkey}, {"theme", theme}, {"on_top", on_top}, {"chat_type", chat_type}, {"custom_icon", custom_icon},
             {"key_on", key_on}, {"key_target", key_target}, {"key_hot", key_hot}, {"key_mode", key_mode},
             {"key_delay", key_delay}, {"key_burst", key_burst}};
   }
@@ -206,15 +207,27 @@ class Engine {
       if (!plat::wait_until(next, running)) break;
     }
     plat::engine_thread_end();
+    if (std::string(name_) == "click") plat::chat_relay(false, {});
     running = false;
     js(std::string("onRunning('") + name_ + "',false)");
   }
 };
 
 // Auto clicker: one click (or one pass over the saved spots) per step
+// Type while clicking: hold the user's typing back from the game, type it into chat between clicks.
+static void chat_sync(bool on) {
+  std::vector<std::string> keep;
+  { std::lock_guard<std::mutex> l(CFG.m); keep = {CFG.hotkey, CFG.killkey, CFG.key_hot}; }
+  plat::chat_relay(on, keep);
+}
 static bool click_step(Engine &e) {
   using namespace std::chrono;
   Snap s = snapshot(true);
+  static thread_local bool relay = false;
+  bool want;
+  { std::lock_guard<std::mutex> l(CFG.m); want = CFG.chat_type; }
+  if (want != relay) { relay = want; chat_sync(want); }
+  if (want) plat::chat_flush();
   if (s.multi && !s.pos.empty()) {
     for (size_t i = 0; i < s.pos.size() && e.running; ++i) {
       plat::click_at(s.pos[i].first, s.pos[i].second, s.btn);
@@ -377,7 +390,7 @@ static void restore_icon() {
 }
 
 // ---- auto update: bump NYC_VERSION for every release (tag it v<NYC_VERSION> on GitHub)
-#define NYC_VERSION "1.0.4"
+#define NYC_VERSION "1.0.5"
 #define NYC_REPO "BeaglewareTM/Autoclicker"
 static void start_updater() {
   std::thread([] {
@@ -477,6 +490,7 @@ static void bind_all() {
         else if (k == "burst") CFG.burst = (int)std::lround(v.get<double>());
         else if (k == "theme") { CFG.theme = v.get<std::string>(); theme = true; }
         else if (k == "on_top") { CFG.on_top = v.get<bool>(); top = true; }
+        else if (k == "chat_type") CFG.chat_type = v.get<bool>();
         else if (k == "key_on") { CFG.key_on = v.get<bool>(); kstop = !CFG.key_on; }
         else if (k == "key_mode") { CFG.key_mode = v.get<std::string>(); kstop = true; }
         else if (k == "key_delay") CFG.key_delay = v.get<double>();

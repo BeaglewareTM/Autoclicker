@@ -386,6 +386,10 @@ std::filesystem::path choose_icon_file() {
   return std::filesystem::path([p.URLs[0].path UTF8String]);
 }
 
+// Type while clicking is Windows-only for now.
+void chat_relay(bool, const std::vector<std::string> &) {}
+bool chat_flush() { return false; }
+
 // Auto update is Windows-only for now.
 bool update_fetch(const char *, const char *) { return false; }
 void update_install_and_restart() { quit_now(); }

@@ -3,6 +3,7 @@
 #undef main
 #include <cassert>
 #include <cstdio>
+namespace plat { extern int CHAT_RELAY; }
 extern std::atomic<long> CLICKS; extern std::atomic<long> AT; extern std::atomic<long> KEYS;
 using namespace std::chrono_literals;
 static webview::webview *M;
@@ -15,7 +16,7 @@ int main() {
   static webview::webview w(false, nullptr); W = &w; M = &w; bind_all();
   // state + sanitizing
   auto st = json::parse(M->call("bc_get_state", "[]")); printf("%s\n", st.dump().c_str());
-  if (st.value("version", "") != "1.0.4") { printf("FAIL version missing\n"); return 1; }
+  if (st.value("version", "") != "1.0.5") { printf("FAIL version missing\n"); return 1; }
   CHECK(st["cps"] == 20.0 && st["hotkey_name"] == "F6" && st["killkey_name"] == "Insert" && st["theme"] == "Dark");
   M->call("bc_set", R"(["cps", 99999])"); CHECK(CFG.cps == 1000);
   M->call("bc_set", R"(["cps", "garbage"])"); CHECK(CFG.cps == 1000);
@@ -68,6 +69,12 @@ int main() {
   Settings s3; s3.load(); CHECK(s3.cps == 20.0 && s3.hotkey == "vk:117");
   { std::ofstream o("/tmp/beagle_test_cfg/settings.json"); o << R"({"cps":"x","positions":[[1],[2,3],"a"],"burst":-5})"; }
   Settings s4; s4.load(); CHECK(s4.cps == 20.0 && s4.positions.size() == 1 && s4.burst == 1);
+  // ---------- type while clicking ----------
+  M->call("bc_set", R"(["chat_type", true])"); CHECK(CFG.chat_type);
+  { Settings s5; s5.load(); CHECK(s5.chat_type); }
+  ENGINE.start(0); std::this_thread::sleep_for(50ms); CHECK(plat::CHAT_RELAY == 1);
+  ENGINE.stop(); std::this_thread::sleep_for(50ms); CHECK(plat::CHAT_RELAY == 0);
+  M->call("bc_set", R"(["chat_type", false])");
   // ---------- key macro ----------
   { std::ofstream o("/tmp/beagle_test_cfg/settings.json"); o << "{}"; }
   CFG.load();

@@ -137,6 +137,7 @@ body{font-family:Inter,"Segoe UI Variable","Segoe UI",sans-serif;-webkit-font-sm
    <div class="row"><div><div class="lbl">Icon</div><div class="sub" id="iconsub">Default icon</div></div>
     <div style="display:flex;gap:6px"><div class="box btn" id="iconreset" style="width:70px;color:var(--sub)">Reset</div><div class="box btn" id="iconpick" style="width:100px;font-weight:600">Choose</div></div></div>
    <div class="row"><div><div class="lbl">Always on top</div><div class="sub">Stays above other windows</div></div><div class="tg" id="ontop"><i></i></div></div>
+   <div class="row"><div><div class="lbl">Type while clicking</div><div class="sub">Keeps clicking while you type in Roblox chat</div></div><div class="tg" id="chattype"><i></i></div></div>
    <div class="row"><div><div class="lbl">Killswitch</div><div class="sub">Stops everything instantly</div></div><div class="box btn wide" data-bind="killkey">Insert</div></div>
    <div class="row"><div><div class="lbl">Backup</div><div class="sub" id="bksub">Save or load all your settings</div></div>
     <div style="display:flex;gap:6px"><div class="box btn" id="bkimport" style="width:70px;color:var(--sub)">Import</div><div class="box btn" id="bkexport" style="width:100px;font-weight:600">Export</div></div></div>
@@ -260,6 +261,7 @@ document.querySelectorAll('.step').forEach(st=>{
 
 /* ---------- toggles ---------- */
 $('armed').onclick=()=>{if(picking)return;S.armed=!S.armed;setArmed(S.armed);call('set','armed',S.armed);};
+$('chattype').onclick=()=>{S.chat_type=!S.chat_type;$('chattype').classList.toggle('on',S.chat_type);call('set','chat_type',S.chat_type);};
 $('ontop').onclick=()=>{S.on_top=!S.on_top;$('ontop').classList.toggle('on',S.on_top);call('set','on_top',S.on_top);};
 function setArmed(on){S.armed=on;$('armed').classList.toggle('on',on);
   if(S.perm===false){$('hint').textContent='Allow Accessibility in System Settings';return;}
@@ -346,6 +348,7 @@ function applyAll(){
   document.querySelectorAll('.seg').forEach(seg=>segSet(seg,S[seg.dataset.key],false));
   document.querySelectorAll('[data-bind]').forEach(b=>b.textContent=S[b.dataset.bind+'_name']);
   $('ontop').classList.toggle('on',!!S.on_top);
+  $('chattype').classList.toggle('on',!!S.chat_type);
   showIcon();
   setArmed(!!S.armed);
   setKArmed(!!S.key_on);

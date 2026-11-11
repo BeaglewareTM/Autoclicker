@@ -29,6 +29,9 @@ std::filesystem::path config_dir() { return "/tmp/beagle_test_cfg"; }
 void show_error(const std::string &) {}
 std::filesystem::path choose_icon_file() { return {}; }
 bool update_fetch(const char *, const char *) { return false; }
+int CHAT_RELAY = 0;
+void chat_relay(bool on, const std::vector<std::string> &) { CHAT_RELAY = on ? 1 : 0; }
+bool chat_flush() { return false; }
 void update_install_and_restart() { std::abort(); }
 void update_cleanup() {}
 std::filesystem::path TEST_EXPORT, TEST_IMPORT;
