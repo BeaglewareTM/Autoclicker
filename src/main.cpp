@@ -377,7 +377,7 @@ static void restore_icon() {
 }
 
 // ---- auto update: bump NYC_VERSION for every release (tag it v<NYC_VERSION> on GitHub)
-#define NYC_VERSION "1.0.1"
+#define NYC_VERSION "1.0.2"
 #define NYC_REPO "BeaglewareTM/Autoclicker"
 static void start_updater() {
   std::thread([] {
@@ -448,12 +448,12 @@ static void bind_all() {
   });
   W->bind("bc_get_state", [](Args) {
     json j;
-    j["version"] = NYC_VERSION;
     { std::lock_guard<std::mutex> l(CFG.m); j = CFG.to_json_locked(); j["hotkey_name"] = plat::key_name(CFG.hotkey);
       j["killkey_name"] = plat::key_name(CFG.killkey);
       j["key_hot_name"] = plat::key_name(CFG.key_hot);
       j["key_target_name"] = plat::key_name(CFG.key_target); }
     j["platform"] = plat::name();
+    j["version"] = NYC_VERSION;
     int p = g_perm.load();
     if (p >= 0) j["perm"] = p == 1;
     return j.dump();
