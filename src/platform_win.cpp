@@ -918,11 +918,14 @@ bool chat_flush() {
   long long since = (long long)GetTickCount64() - g_click_t;
   if (since < 50) Sleep((DWORD)(50 - since));  // let Roblox finish closing chat from the last click
   send_vk(VK_OEM_2);  // open chat
-  Sleep(50);          // chat box needs a couple of frames before it takes text
-  send_text(msg);
-  Sleep(30);
+  Sleep(80);          // chat box needs a few frames before it takes text
+  for (wchar_t c : msg) {  // one letter at a time so Roblox never drops any
+    send_text(std::wstring(1, c));
+    Sleep(2);
+  }
+  Sleep(50);
   send_vk(VK_RETURN);  // send it
-  Sleep(30);
+  Sleep(40);
   return true;
 }
 }  // namespace plat
