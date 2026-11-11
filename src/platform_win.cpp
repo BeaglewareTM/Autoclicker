@@ -919,9 +919,11 @@ bool chat_flush() {
   if (since < 50) Sleep((DWORD)(50 - since));  // let Roblox finish closing chat from the last click
   send_vk(VK_OEM_2);  // open chat
   Sleep(80);          // chat box needs a few frames before it takes text
-  for (wchar_t c : msg) {  // one letter at a time so Roblox never drops any
-    send_text(std::wstring(1, c));
-    Sleep(2);
+  // Small bursts with a 1 ms gap: near-instant even for long messages, but never so many
+  // letters in one go that Roblox drops some.
+  for (size_t i = 0; i < msg.size(); i += 6) {
+    send_text(msg.substr(i, 6));
+    Sleep(1);
   }
   Sleep(50);
   send_vk(VK_RETURN);  // send it
