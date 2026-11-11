@@ -777,14 +777,19 @@ void update_install_and_restart() {
 }  // namespace plat
 
 // ---------------------------------------------------------------- type while clicking
+// Press / and type: NYC keeps clicking and quietly collects what you type (so nothing reaches the
+// game, and keys like W/A/S/D only get collected while you're typing). On Enter it pauses for a
+// split second, opens chat with /, types the whole message at once, sends it, and clicks on.
+// Esc cancels. When you're not typing, every key goes to the game as normal (walking works).
 namespace plat {
 namespace {
-struct ChatKey { wchar_t ch; WORD vk; };  // ch for text, vk for Enter / Backspace
 std::mutex g_chat_m;
-std::vector<ChatKey> g_chat_q;
+std::wstring g_chat_buf;      // message being typed
+std::wstring g_chat_ready;    // finished message waiting to be sent
+bool g_chat_has_ready = false;
 std::vector<WORD> g_chat_keep;
 bool g_chat_swallowed[256];
-std::atomic<bool> g_chat_on{false};
+std::atomic<bool> g_chat_on{false}, g_typing{false};
 std::thread g_chat_th;
 DWORD g_chat_tid = 0;
 
@@ -797,28 +802,41 @@ LRESULT CALLBACK chat_hook(int code, WPARAM wp, LPARAM lp) {
     if (!(k->flags & LLKHF_INJECTED) && vk < 256) {
       if (up && g_chat_swallowed[vk]) { g_chat_swallowed[vk] = false; return 1; }
       if (down && GetForegroundWindow() != g_win) {
-        bool keep = vk == VK_OEM_2 || vk == VK_ESCAPE;  // "/" and Esc go straight to Roblox
+        bool mod = (GetAsyncKeyState(VK_CONTROL) | GetAsyncKeyState(VK_MENU) | GetAsyncKeyState(VK_LWIN) |
+                    GetAsyncKeyState(VK_RWIN)) & 0x8000;
+        bool keep = mod;
         {
           std::lock_guard<std::mutex> l(g_chat_m);
           for (WORD w : g_chat_keep) keep = keep || w == vk;
         }
-        bool mod = (GetAsyncKeyState(VK_CONTROL) | GetAsyncKeyState(VK_MENU) | GetAsyncKeyState(VK_LWIN) |
-                    GetAsyncKeyState(VK_RWIN)) & 0x8000;
-        if (!keep && !mod) {
-          ChatKey ck{0, 0};
-          if (vk == VK_RETURN || vk == VK_BACK) ck.vk = vk;
-          else {
-            BYTE st[256]{};
-            if (GetAsyncKeyState(VK_SHIFT) & 0x8000) st[VK_SHIFT] = 0x80;
-            if (GetKeyState(VK_CAPITAL) & 1) st[VK_CAPITAL] = 1;
-            wchar_t buf[4];
-            int n = ToUnicodeEx(vk, k->scanCode, st, buf, 4, 4 /*don't change keyboard state*/, GetKeyboardLayout(0));
-            if (n == 1 && buf[0] >= 32) ck.ch = buf[0];
-          }
-          if (ck.ch || ck.vk) {
-            { std::lock_guard<std::mutex> l(g_chat_m); g_chat_q.push_back(ck); }
+        if (!keep) {
+          if (!g_typing) {
+            if (vk == VK_OEM_2) {  // "/" starts a message
+              std::lock_guard<std::mutex> l(g_chat_m);
+              g_chat_buf.clear();
+              g_typing = true;
+              g_chat_swallowed[vk] = true;
+              return 1;
+            }
+          } else {
+            std::lock_guard<std::mutex> l(g_chat_m);
+            if (vk == VK_ESCAPE) { g_chat_buf.clear(); g_typing = false; }
+            else if (vk == VK_RETURN) {
+              if (!g_chat_buf.empty()) { g_chat_ready = g_chat_buf; g_chat_has_ready = true; }
+              g_chat_buf.clear();
+              g_typing = false;
+            } else if (vk == VK_BACK) { if (!g_chat_buf.empty()) g_chat_buf.pop_back(); }
+            else {
+              BYTE st[256]{};
+              if (GetAsyncKeyState(VK_SHIFT) & 0x8000) st[VK_SHIFT] = 0x80;
+              if (GetKeyState(VK_CAPITAL) & 1) st[VK_CAPITAL] = 1;
+              wchar_t buf[4];
+              int n = ToUnicodeEx(vk, k->scanCode, st, buf, 4, 4 /*don't change keyboard state*/, GetKeyboardLayout(0));
+              if (n == 1 && buf[0] >= 32) g_chat_buf += buf[0];
+              else return CallNextHookEx(nullptr, code, wp, lp);  // arrows, F-keys...: let them through
+            }
             g_chat_swallowed[vk] = true;
-            return 1;  // keep it away from the game; it's typed into chat between clicks
+            return 1;
           }
         }
       }
@@ -838,24 +856,27 @@ void send_vk(WORD vk) {
   }
   SendInput(2, in, sizeof(INPUT));
 }
-void send_char(wchar_t ch) {
-  INPUT in[2]{};
-  for (int i = 0; i < 2; ++i) {
-    in[i].type = INPUT_KEYBOARD;
-    in[i].ki.wScan = ch;
-    in[i].ki.dwFlags = KEYEVENTF_UNICODE | (i ? KEYEVENTF_KEYUP : 0);
-  }
-  SendInput(2, in, sizeof(INPUT));
+void send_text(const std::wstring &t) {
+  std::vector<INPUT> in(t.size() * 2);
+  for (size_t i = 0; i < t.size(); ++i)
+    for (int j = 0; j < 2; ++j) {
+      INPUT &x = in[i * 2 + j];
+      x.type = INPUT_KEYBOARD;
+      x.ki.wScan = t[i];
+      x.ki.dwFlags = KEYEVENTF_UNICODE | (j ? KEYEVENTF_KEYUP : 0);
+    }
+  if (!in.empty()) SendInput((UINT)in.size(), in.data(), sizeof(INPUT));
 }
 WORD vk_of(const std::string &id) { return id.rfind("vk:", 0) == 0 ? (WORD)atoi(id.c_str() + 3) : 0; }
 }  // namespace
+
+// Last real click (chat must be fully closed by Roblox before we press "/")
 
 void chat_relay(bool on, const std::vector<std::string> &keep) {
   {
     std::lock_guard<std::mutex> l(g_chat_m);
     g_chat_keep.clear();
     for (auto &k : keep) if (WORD v = vk_of(k)) g_chat_keep.push_back(v);
-    if (!on) g_chat_q.clear();
   }
   if (on == g_chat_on) return;
   if (on) {
@@ -874,33 +895,34 @@ void chat_relay(bool on, const std::vector<std::string> &keep) {
     g_chat_tid = tid;
   } else {
     g_chat_on = false;
+    g_typing = false;
     PostThreadMessageW(g_chat_tid, WM_QUIT, 0, 0);
     if (g_chat_th.joinable()) g_chat_th.join();
     for (bool &b : g_chat_swallowed) b = false;
+    std::lock_guard<std::mutex> l(g_chat_m);
+    g_chat_buf.clear();
+    g_chat_ready.clear();
+    g_chat_has_ready = false;
   }
 }
 
 bool chat_flush() {
-  std::vector<ChatKey> q;
-  { std::lock_guard<std::mutex> l(g_chat_m); q.swap(g_chat_q); }
-  if (q.empty()) return false;
+  std::wstring msg;
+  {
+    std::lock_guard<std::mutex> l(g_chat_m);
+    if (!g_chat_has_ready) return false;
+    msg.swap(g_chat_ready);
+    g_chat_has_ready = false;
+  }
   if (GetForegroundWindow() == g_win) return true;
-  static unsigned long long last_n = ~0ull;
-  if (g_click_n != last_n) {
-    // A click happened since we last typed, so chat is (or is about to be) closed. Wait until
-    // Roblox has actually closed it, otherwise our "/" lands in the chat box as text.
-    long long since = (long long)GetTickCount64() - g_click_t;
-    if (since < 45) Sleep((DWORD)(45 - since));
-    send_vk(VK_OEM_2);  // "/" opens Roblox chat (cursor goes back into the box, text kept)
-    Sleep(35);          // Roblox needs a frame or two before the chat box takes letters
-  }
-  // else: no click since last time, so chat is still open; type straight in, no "/"
-  for (auto &k : q) {
-    if (k.vk) send_vk(k.vk);
-    else send_char(k.ch);
-  }
-  Sleep(15);  // let Roblox take the letters before the next click closes the box
-  last_n = g_click_n;
+  long long since = (long long)GetTickCount64() - g_click_t;
+  if (since < 50) Sleep((DWORD)(50 - since));  // let Roblox finish closing chat from the last click
+  send_vk(VK_OEM_2);  // open chat
+  Sleep(50);          // chat box needs a couple of frames before it takes text
+  send_text(msg);
+  Sleep(30);
+  send_vk(VK_RETURN);  // send it
+  Sleep(30);
   return true;
 }
 }  // namespace plat
