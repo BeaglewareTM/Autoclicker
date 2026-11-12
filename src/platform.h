@@ -49,6 +49,10 @@ std::string key_name(const std::string &id);
 std::string default_hotkey();
 std::string default_killkey();
 std::string default_keyhot();
+// Booga "Heal and drop": default start/stop hotkey (F8) and the two menu keys (C, Z)
+std::string default_hdhot();
+std::string default_heal_key();
+std::string default_drop_key();
 bool is_escape(const std::string &id);
 bool is_clear_key(const std::string &id);
 

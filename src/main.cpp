@@ -59,6 +59,11 @@ struct Settings {
   std::string key_target, key_hot, key_mode = "Toggle";
   double key_delay = 100.0;  // ms between presses, 0.01 minimum
   int key_burst = 10;
+  // Booga: Heal and drop (press heal key, click heal spot, press drop key, click drop spot, repeat)
+  bool hd_on = false;
+  std::string hd_hot, hd_heal_key, hd_drop_key;
+  int hd_heal_x = -1, hd_heal_y = -1, hd_drop_x = -1, hd_drop_y = -1;  // -1 = not set
+  int hd_wait = 30;  // ms after each menu key before clicking
 
   fs::path file() { return plat::config_dir() / "settings.json"; }
 
@@ -77,6 +82,9 @@ struct Settings {
     if (!std::isfinite(key_delay)) key_delay = 100.0;
     key_delay = std::clamp(std::round(key_delay * 100.0) / 100.0, 0.01, 10000.0);
     key_burst = std::clamp(key_burst, 1, 10000);
+    hd_wait = std::clamp(hd_wait, 5, 1000);
+    if (hd_heal_x < 0 || hd_heal_y < 0) hd_heal_x = hd_heal_y = -1;
+    if (hd_drop_x < 0 || hd_drop_y < 0) hd_drop_x = hd_drop_y = -1;
   }
 
   void load() { load_from(file()); }
@@ -86,6 +94,9 @@ struct Settings {
     hotkey = plat::default_hotkey();
     killkey = plat::default_killkey();
     key_hot = plat::default_keyhot();
+    hd_hot = plat::default_hdhot();
+    hd_heal_key = plat::default_heal_key();
+    hd_drop_key = plat::default_drop_key();
     bool ok = false;
     try {
       std::ifstream f(path);
@@ -101,6 +112,15 @@ struct Settings {
           get("hotkey", hotkey); get("killkey", killkey); get("theme", theme); get("on_top", on_top); get("chat_type", chat_type); get("custom_icon", custom_icon);
           get("key_on", key_on); get("key_target", key_target); get("key_hot", key_hot); get("key_mode", key_mode);
           get("key_delay", key_delay); get("key_burst", key_burst);
+          get("hd_on", hd_on); get("hd_hot", hd_hot); get("hd_heal_key", hd_heal_key); get("hd_drop_key", hd_drop_key);
+          get("hd_wait", hd_wait);
+          auto spot = [&](const char *k, int &x, int &y) {
+            if (j.contains(k) && j[k].is_array() && j[k].size() == 2 && j[k][0].is_number() && j[k][1].is_number()) {
+              x = j[k][0].get<int>(); y = j[k][1].get<int>();
+            }
+          };
+          spot("hd_heal_spot", hd_heal_x, hd_heal_y);
+          spot("hd_drop_spot", hd_drop_x, hd_drop_y);
           if (j.contains("positions") && j["positions"].is_array()) {
             for (auto &p : j["positions"])
               if (p.is_array() && p.size() == 2 && p[0].is_number() && p[1].is_number())
@@ -120,6 +140,9 @@ struct Settings {
     theme = o.theme; on_top = o.on_top; chat_type = o.chat_type; custom_icon = o.custom_icon; key_on = o.key_on;
     key_target = o.key_target; key_hot = o.key_hot; key_mode = o.key_mode; key_delay = o.key_delay;
     key_burst = o.key_burst;
+    hd_on = o.hd_on; hd_hot = o.hd_hot; hd_heal_key = o.hd_heal_key; hd_drop_key = o.hd_drop_key;
+    hd_heal_x = o.hd_heal_x; hd_heal_y = o.hd_heal_y; hd_drop_x = o.hd_drop_x; hd_drop_y = o.hd_drop_y;
+    hd_wait = o.hd_wait;
   }
 
   json to_json_locked() const {
@@ -129,7 +152,9 @@ struct Settings {
             {"pos_delay", pos_delay}, {"burst", burst}, {"positions", pos}, {"hotkey", hotkey},
             {"killkey", killkey}, {"theme", theme}, {"on_top", on_top}, {"chat_type", chat_type}, {"custom_icon", custom_icon},
             {"key_on", key_on}, {"key_target", key_target}, {"key_hot", key_hot}, {"key_mode", key_mode},
-            {"key_delay", key_delay}, {"key_burst", key_burst}};
+            {"key_delay", key_delay}, {"key_burst", key_burst},
+            {"hd_on", hd_on}, {"hd_hot", hd_hot}, {"hd_heal_key", hd_heal_key}, {"hd_drop_key", hd_drop_key},
+            {"hd_heal_spot", {hd_heal_x, hd_heal_y}}, {"hd_drop_spot", {hd_drop_x, hd_drop_y}}, {"hd_wait", hd_wait}};
   }
 
   void save() {
@@ -217,7 +242,7 @@ class Engine {
 // Type while clicking: hold the user's typing back from the game, type it into chat between clicks.
 static void chat_sync(bool on) {
   std::vector<std::string> keep;
-  { std::lock_guard<std::mutex> l(CFG.m); keep = {CFG.hotkey, CFG.killkey, CFG.key_hot}; }
+  { std::lock_guard<std::mutex> l(CFG.m); keep = {CFG.hotkey, CFG.killkey, CFG.key_hot, CFG.hd_hot}; }
   plat::chat_relay(on, keep);
 }
 static bool click_step(Engine &e) {
@@ -255,8 +280,32 @@ static bool key_step(Engine &) {
 static constexpr double MIN_INTERVAL_MS = 10.0;
 static double key_interval() { std::lock_guard<std::mutex> l(CFG.m); return std::max(MIN_INTERVAL_MS, CFG.key_delay); }
 
+// Booga Heal and drop: open heal menu, click heal spot, open shop, click chest button.
+// Always alternates the two keys, so a menu key is never pressed twice in a row.
+static bool hd_step(Engine &e) {
+  using namespace std::chrono;
+  std::string hk, dk;
+  int hx, hy, dx, dy, w;
+  {
+    std::lock_guard<std::mutex> l(CFG.m);
+    hk = CFG.hd_heal_key; dk = CFG.hd_drop_key; w = CFG.hd_wait;
+    hx = CFG.hd_heal_x; hy = CFG.hd_heal_y; dx = CFG.hd_drop_x; dy = CFG.hd_drop_y;
+  }
+  if (hk.empty() || dk.empty() || hx < 0 || dx < 0) return false;  // not set up yet
+  plat::press_key(hk);
+  if (!plat::wait_until(plat::Clock::now() + milliseconds(w), e.running)) return false;
+  plat::click_at(hx, hy, 0);
+  if (!plat::wait_until(plat::Clock::now() + milliseconds(w), e.running)) return false;
+  plat::press_key(dk);
+  if (!plat::wait_until(plat::Clock::now() + milliseconds(w), e.running)) return false;
+  plat::click_at(dx, dy, 0);
+  return true;
+}
+static double hd_interval() { std::lock_guard<std::mutex> l(CFG.m); return (double)std::max(5, CFG.hd_wait); }
+
 static Engine ENGINE("click", click_step, click_interval);
 static Engine KENGINE("key", key_step, key_interval);
+static Engine HDENGINE("hd", hd_step, hd_interval);
 
 // ============================================================================
 // Hotkeys (called on the hook thread - must stay fast)
@@ -264,6 +313,7 @@ static Engine KENGINE("key", key_step, key_interval);
 static std::mutex g_state_m;
 static std::string g_binding;  // "", "hotkey", "killkey", "key_hot" or "key_target"
 static std::atomic<bool> g_picking{false};
+static std::string g_pick_target;  // "" = Multi list, "hd_heal" / "hd_drop" = Booga spots (guarded by g_state_m)
 static std::set<std::string> g_held;  // only touched on the hook thread
 
 static std::string positions_json() {
@@ -278,6 +328,9 @@ static std::string *bind_slot(const std::string &key) {
   if (key == "killkey") return &CFG.killkey;
   if (key == "key_hot") return &CFG.key_hot;
   if (key == "key_target") return &CFG.key_target;
+  if (key == "hd_hot") return &CFG.hd_hot;
+  if (key == "hd_heal_key") return &CFG.hd_heal_key;
+  if (key == "hd_drop_key") return &CFG.hd_drop_key;
   return nullptr;
 }
 
@@ -290,19 +343,27 @@ static void finish_bind(const std::string &id) {
     std::lock_guard<std::mutex> l(CFG.m);
     std::string *slot = bind_slot(key);
     if (!slot) return;
-    bool is_hotkey = key != "key_target";
+    // NYC's own start/stop keys vs keys NYC presses for you
+    const std::vector<std::pair<std::string, std::string *>> hots = {
+        {"hotkey", &CFG.hotkey}, {"killkey", &CFG.killkey}, {"key_hot", &CFG.key_hot}, {"hd_hot", &CFG.hd_hot}};
+    const std::vector<std::string *> presses = {&CFG.key_target, &CFG.hd_heal_key, &CFG.hd_drop_key};
+    bool is_hotkey = key == "hotkey" || key == "killkey" || key == "key_hot" || key == "hd_hot";
+    bool is_hot_id = false;
+    for (auto &h : hots) is_hot_id = is_hot_id || (h.first != key && *h.second == id);
     if (plat::is_escape(id)) {
       // cancelled: keep the old key
-    } else if (plat::is_clear_key(id) && (key == "hotkey" || key == "key_hot")) {
+    } else if (plat::is_clear_key(id) && (key == "hotkey" || key == "key_hot" || key == "hd_hot")) {
       slot->clear();
     } else if (is_hotkey) {
-      // the three hotkeys must all be different
-      bool clash = (key != "hotkey" && id == CFG.hotkey) || (key != "killkey" && id == CFG.killkey) ||
-                   (key != "key_hot" && id == CFG.key_hot) || id == CFG.key_target;
+      // hotkeys must all be different, and never a key NYC presses itself
+      bool clash = is_hot_id;
+      for (auto *pk : presses) clash = clash || *pk == id;
       if (!clash) *slot = id;
     } else {
-      // the key to spam can be anything except one of NYC's own hotkeys (it would trigger itself)
-      if (id != CFG.hotkey && id != CFG.killkey && id != CFG.key_hot) *slot = id;
+      // a key NYC presses can be anything except one of NYC's own hotkeys (it would trigger itself)
+      bool clash = false;
+      for (auto &h : hots) clash = clash || *h.second == id;
+      if (!clash) *slot = id;
     }
     name = plat::key_name(*slot);
   }
@@ -322,19 +383,21 @@ static void on_key(const std::string &id, bool down) {
     { std::lock_guard<std::mutex> l(g_state_m); binding = !g_binding.empty(); }
     if (binding) { finish_bind(id); return; }
     if (!g_held.insert(id).second) return;  // key auto-repeat
-    std::string hot, kill, mode, khot, kmode;
-    bool armed, karmed;
+    std::string hot, kill, mode, khot, kmode, hdhot;
+    bool armed, karmed, hdon;
     int burst, kburst;
     {
       std::lock_guard<std::mutex> l(CFG.m);
       hot = CFG.hotkey; kill = CFG.killkey; mode = CFG.mode; armed = CFG.armed; burst = CFG.burst;
       khot = CFG.key_hot; kmode = CFG.key_mode; karmed = CFG.key_on; kburst = CFG.key_burst;
+      hdhot = CFG.hd_hot; hdon = CFG.hd_on;
     }
     if (id == kill) {
       ENGINE.stop();
       KENGINE.stop();
-      if (armed || karmed) {
-        { std::lock_guard<std::mutex> l(CFG.m); CFG.armed = false; CFG.key_on = false; }
+      HDENGINE.stop();
+      if (armed || karmed || hdon) {
+        { std::lock_guard<std::mutex> l(CFG.m); CFG.armed = false; CFG.key_on = false; CFG.hd_on = false; }
         CFG.save();
       }
       js("onKilled()");
@@ -343,6 +406,7 @@ static void on_key(const std::string &id, bool down) {
     if (g_picking && plat::is_escape(id)) { g_picking = false; js("onPickCancel()"); return; }
     if (armed && id == hot) run_mode(ENGINE, mode, burst);
     if (karmed && id == khot) run_mode(KENGINE, kmode, kburst);
+    if (hdon && id == hdhot) HDENGINE.toggle();
   } else {
     g_held.erase(id);
     std::lock_guard<std::mutex> l(CFG.m);
@@ -353,6 +417,18 @@ static void on_key(const std::string &id, bool down) {
 
 static void on_pick(int x, int y) {
   if (!g_picking.exchange(false)) return;
+  std::string target;
+  { std::lock_guard<std::mutex> l(g_state_m); target.swap(g_pick_target); }
+  if (target == "hd_heal" || target == "hd_drop") {
+    {
+      std::lock_guard<std::mutex> l(CFG.m);
+      if (target == "hd_heal") { CFG.hd_heal_x = x; CFG.hd_heal_y = y; }
+      else { CFG.hd_drop_x = x; CFG.hd_drop_y = y; }
+    }
+    CFG.save();
+    js("onSpot(" + json(target).dump() + "," + std::to_string(x) + "," + std::to_string(y) + ")");
+    return;
+  }
   { std::lock_guard<std::mutex> l(CFG.m); if (CFG.positions.size() < 500) CFG.positions.emplace_back(x, y); }
   CFG.save();
   js("onPositions(" + positions_json() + ")");
@@ -390,16 +466,17 @@ static void restore_icon() {
 }
 
 // ---- auto update: bump NYC_VERSION for every release (tag it v<NYC_VERSION> on GitHub)
-#define NYC_VERSION "1.0.9"
+#define NYC_VERSION "1.0.10"
 #define NYC_REPO "BeaglewareTM/Autoclicker"
 static void start_updater() {
   std::thread([] {
     plat::update_cleanup();
     if (!plat::update_fetch(NYC_REPO, NYC_VERSION)) return;
     // never restart in the middle of a macro: wait until both are stopped and no keybind/pick is pending
-    while (ENGINE.running || KENGINE.running) std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    while (ENGINE.running || KENGINE.running || HDENGINE.running) std::this_thread::sleep_for(std::chrono::milliseconds(250));
     ENGINE.stop();
     KENGINE.stop();
+    HDENGINE.stop();
     plat::stop_hooks();
     CFG.save();
     plat::update_install_and_restart();
@@ -409,6 +486,7 @@ static void start_updater() {
 [[noreturn]] static void shutdown_now() {
   ENGINE.stop();
   KENGINE.stop();
+  HDENGINE.stop();
   plat::stop_hooks();  // free the mouse/keyboard hooks first so the PC never lags
   CFG.save();
   plat::quit_now();
@@ -447,12 +525,14 @@ static void bind_all() {
     if (!fresh.load_from(in)) return std::string(R"({"done":true,"ok":false})");
     ENGINE.stop();
     KENGINE.stop();
+    HDENGINE.stop();
     {
       std::lock_guard<std::mutex> l(CFG.m);
       bool icon = CFG.custom_icon;
       CFG.copy_from(fresh);
       CFG.armed = false;   // never come back armed from a file
       CFG.key_on = false;
+      CFG.hd_on = false;
       CFG.custom_icon = icon;  // the icon image itself isn't in the file, keep the current one
     }
     CFG.save();
@@ -464,7 +544,10 @@ static void bind_all() {
     { std::lock_guard<std::mutex> l(CFG.m); j = CFG.to_json_locked(); j["hotkey_name"] = plat::key_name(CFG.hotkey);
       j["killkey_name"] = plat::key_name(CFG.killkey);
       j["key_hot_name"] = plat::key_name(CFG.key_hot);
-      j["key_target_name"] = plat::key_name(CFG.key_target); }
+      j["key_target_name"] = plat::key_name(CFG.key_target);
+      j["hd_hot_name"] = plat::key_name(CFG.hd_hot);
+      j["hd_heal_key_name"] = plat::key_name(CFG.hd_heal_key);
+      j["hd_drop_key_name"] = plat::key_name(CFG.hd_drop_key); }
     j["platform"] = plat::name();
     j["version"] = NYC_VERSION;
     int p = g_perm.load();
@@ -477,7 +560,7 @@ static void bind_all() {
     if (a.size() < 2 || !a[0].is_string()) return std::string("null");
     std::string k = a[0];
     const json &v = a[1];
-    bool stop = false, kstop = false, theme = false, top = false;
+    bool stop = false, kstop = false, hdstop = false, theme = false, top = false;
     {
       std::lock_guard<std::mutex> l(CFG.m);
       try {
@@ -495,11 +578,14 @@ static void bind_all() {
         else if (k == "key_mode") { CFG.key_mode = v.get<std::string>(); kstop = true; }
         else if (k == "key_delay") CFG.key_delay = v.get<double>();
         else if (k == "key_burst") CFG.key_burst = (int)std::lround(v.get<double>());
+        else if (k == "hd_on") { CFG.hd_on = v.get<bool>(); hdstop = !CFG.hd_on; }
+        else if (k == "hd_wait") CFG.hd_wait = (int)std::lround(v.get<double>());
       } catch (...) {}
       CFG.sanitize();
     }
     if (stop) ENGINE.stop();
     if (kstop) KENGINE.stop();
+    if (hdstop) HDENGINE.stop();
     if (theme || top) apply_theme();
     CFG.save();
     return std::string("null");
@@ -530,7 +616,8 @@ static void bind_all() {
   W->bind("bc_start_bind", [](Args req) {
     json a = args(req);
     if (!a.empty() && a[0].is_string() &&
-        (a[0] == "hotkey" || a[0] == "killkey" || a[0] == "key_hot" || a[0] == "key_target")) {
+        (a[0] == "hotkey" || a[0] == "killkey" || a[0] == "key_hot" || a[0] == "key_target" ||
+         a[0] == "hd_hot" || a[0] == "hd_heal_key" || a[0] == "hd_drop_key")) {
       std::lock_guard<std::mutex> l(g_state_m);
       g_binding = a[0].get<std::string>();
     }
@@ -567,9 +654,15 @@ static void bind_all() {
     CFG.save();
     return std::string("null");
   });
-  W->bind("bc_start_pick", [](Args) {
+  W->bind("bc_start_pick", [](Args req) {
+    json a = args(req);
     ENGINE.stop();
     KENGINE.stop();
+    HDENGINE.stop();
+    {
+      std::lock_guard<std::mutex> l(g_state_m);
+      g_pick_target = (!a.empty() && a[0].is_string() && (a[0] == "hd_heal" || a[0] == "hd_drop")) ? a[0].get<std::string>() : "";
+    }
     g_picking = true;
     return std::string("null");
   });
