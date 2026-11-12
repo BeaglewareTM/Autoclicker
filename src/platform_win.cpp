@@ -17,6 +17,7 @@
 #include <shobjidl.h>
 #include <vector>
 #include "json.hpp"
+#include "food_detect.h"
 #include <dwmapi.h>
 #include <commdlg.h>
 #include <wincodec.h>
@@ -549,6 +550,7 @@ std::string key_name(const std::string &id) {
 std::string default_hotkey() { return "vk:117"; }  // F6
 std::string default_killkey() { return "vk:45"; }  // Insert
 std::string default_keyhot() { return "vk:118"; }  // F7
+std::string default_qh_key() { return "vk:67"; }    // C
 bool is_escape(const std::string &id) { return id == "vk:27"; }
 bool is_clear_key(const std::string &id) { return id == "vk:8" || id == "vk:46"; }
 
@@ -929,5 +931,42 @@ bool chat_flush() {
   send_vk(VK_RETURN);  // send it
   Sleep(40);
   return true;
+}
+}  // namespace plat
+
+// ---------------------------------------------------------------- Booga quick heal
+namespace plat {
+bool find_food(int &ox, int &oy) {
+  int vx = GetSystemMetrics(SM_XVIRTUALSCREEN), vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
+  int vw = GetSystemMetrics(SM_CXVIRTUALSCREEN), vh = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+  if (vw <= 0 || vh <= 0) return false;
+  HDC scr = GetDC(nullptr);
+  HDC mem = CreateCompatibleDC(scr);
+  BITMAPINFO bi{};
+  bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  bi.bmiHeader.biWidth = vw;
+  bi.bmiHeader.biHeight = -vh;  // top-down rows
+  bi.bmiHeader.biPlanes = 1;
+  bi.bmiHeader.biBitCount = 32;
+  bi.bmiHeader.biCompression = BI_RGB;
+  void *bits = nullptr;
+  HBITMAP bmp = CreateDIBSection(scr, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+  bool found = false;
+  if (bmp && bits) {
+    HGDIOBJ old = SelectObject(mem, bmp);
+    if (BitBlt(mem, 0, 0, vw, vh, scr, vx, vy, SRCCOPY | CAPTUREBLT)) {
+      GdiFlush();
+      int x, y;
+      if (food::find_bloodfruit(static_cast<const uint8_t *>(bits), vw, vh, vw * 4, x, y)) {
+        POINT pt{x + vx, y + vy};
+        if (!over_self(pt)) { ox = pt.x; oy = pt.y; found = true; }
+      }
+    }
+    SelectObject(mem, old);
+    DeleteObject(bmp);
+  }
+  DeleteDC(mem);
+  ReleaseDC(nullptr, scr);
+  return found;
 }
 }  // namespace plat

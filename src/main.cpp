@@ -59,6 +59,11 @@ struct Settings {
   std::string key_target, key_hot, key_mode = "Toggle";
   double key_delay = 100.0;  // ms between presses, 0.01 minimum
   int key_burst = 10;
+  // Booga: Quick heal (the Autoclicker clicks your food instead, menu opened/closed with qh_key)
+  bool qh_on = false;
+  std::string qh_key;            // menu key, default C
+  std::string qh_find = "Auto find";  // "Auto find" or "Set spot"
+  int qh_x = -1, qh_y = -1;      // saved spot for "Set spot"
 
   fs::path file() { return plat::config_dir() / "settings.json"; }
 
@@ -77,6 +82,8 @@ struct Settings {
     if (!std::isfinite(key_delay)) key_delay = 100.0;
     key_delay = std::clamp(std::round(key_delay * 100.0) / 100.0, 0.01, 10000.0);
     key_burst = std::clamp(key_burst, 1, 10000);
+    if (index_of(qh_find, {"Auto find", "Set spot"}) < 0) qh_find = "Auto find";
+    if (qh_x < 0 || qh_y < 0) qh_x = qh_y = -1;
   }
 
   void load() { load_from(file()); }
@@ -86,6 +93,7 @@ struct Settings {
     hotkey = plat::default_hotkey();
     killkey = plat::default_killkey();
     key_hot = plat::default_keyhot();
+    qh_key = plat::default_qh_key();
     bool ok = false;
     try {
       std::ifstream f(path);
@@ -101,6 +109,11 @@ struct Settings {
           get("hotkey", hotkey); get("killkey", killkey); get("theme", theme); get("on_top", on_top); get("chat_type", chat_type); get("custom_icon", custom_icon);
           get("key_on", key_on); get("key_target", key_target); get("key_hot", key_hot); get("key_mode", key_mode);
           get("key_delay", key_delay); get("key_burst", key_burst);
+          get("qh_on", qh_on); get("qh_key", qh_key); get("qh_find", qh_find);
+          if (j.contains("qh_spot") && j["qh_spot"].is_array() && j["qh_spot"].size() == 2 &&
+              j["qh_spot"][0].is_number() && j["qh_spot"][1].is_number()) {
+            qh_x = j["qh_spot"][0].get<int>(); qh_y = j["qh_spot"][1].get<int>();
+          }
           if (j.contains("positions") && j["positions"].is_array()) {
             for (auto &p : j["positions"])
               if (p.is_array() && p.size() == 2 && p[0].is_number() && p[1].is_number())
@@ -120,6 +133,7 @@ struct Settings {
     theme = o.theme; on_top = o.on_top; chat_type = o.chat_type; custom_icon = o.custom_icon; key_on = o.key_on;
     key_target = o.key_target; key_hot = o.key_hot; key_mode = o.key_mode; key_delay = o.key_delay;
     key_burst = o.key_burst;
+    qh_on = o.qh_on; qh_key = o.qh_key; qh_find = o.qh_find; qh_x = o.qh_x; qh_y = o.qh_y;
   }
 
   json to_json_locked() const {
@@ -129,7 +143,8 @@ struct Settings {
             {"pos_delay", pos_delay}, {"burst", burst}, {"positions", pos}, {"hotkey", hotkey},
             {"killkey", killkey}, {"theme", theme}, {"on_top", on_top}, {"chat_type", chat_type}, {"custom_icon", custom_icon},
             {"key_on", key_on}, {"key_target", key_target}, {"key_hot", key_hot}, {"key_mode", key_mode},
-            {"key_delay", key_delay}, {"key_burst", key_burst}};
+            {"key_delay", key_delay}, {"key_burst", key_burst},
+            {"qh_on", qh_on}, {"qh_key", qh_key}, {"qh_find", qh_find}, {"qh_spot", {qh_x, qh_y}}};
   }
 
   void save() {
@@ -166,6 +181,7 @@ static void js(std::string code) {
 // ============================================================================
 // Click engine
 // ============================================================================
+static void qh_end();  // Booga Quick heal: closes the menu NYC opened (defined below)
 class Engine {
  public:
   std::atomic<bool> running{false};
@@ -207,7 +223,7 @@ class Engine {
       if (!plat::wait_until(next, running)) break;
     }
     plat::engine_thread_end();
-    if (std::string(name_) == "click") plat::chat_relay(false, {});
+    if (std::string(name_) == "click") { plat::chat_relay(false, {}); qh_end(); }
     running = false;
     js(std::string("onRunning('") + name_ + "',false)");
   }
@@ -220,8 +236,56 @@ static void chat_sync(bool on) {
   { std::lock_guard<std::mutex> l(CFG.m); keep = {CFG.hotkey, CFG.killkey, CFG.key_hot}; }
   plat::chat_relay(on, keep);
 }
+// ---- Booga Quick heal: the Autoclicker clicks your food instead of where your mouse is.
+// At the start of a run: if the food is already on screen the menu is open, so just click it;
+// otherwise press the menu key, wait for it to open, then look again. At the end, close the
+// menu again only if NYC opened it.
+static std::atomic<bool> g_qh_opened{false};
+static constexpr int QH_MENU_WAIT_MS = 150;
+struct QhRun { bool on = false, ready = false; int x = -1, y = -1; };
+static bool qh_begin(Engine &e, QhRun &r) {
+  using namespace std::chrono;
+  std::string key, find; int sx, sy;
+  { std::lock_guard<std::mutex> l(CFG.m); key = CFG.qh_key; find = CFG.qh_find; sx = CFG.qh_x; sy = CFG.qh_y; }
+  g_qh_opened = false;
+  auto open_menu = [&]() -> bool {
+    if (key.empty()) return false;
+    plat::press_key(key);
+    g_qh_opened = true;
+    return plat::wait_until(plat::Clock::now() + milliseconds(QH_MENU_WAIT_MS), e.running);
+  };
+  if (find == "Set spot") {
+    if (sx < 0) return false;  // no spot saved yet
+    if (!open_menu()) return false;
+    r.x = sx; r.y = sy;
+    return true;
+  }
+  if (plat::find_food(r.x, r.y)) return true;  // menu already open
+  if (!open_menu()) return false;
+  return plat::find_food(r.x, r.y);  // not found: stop (the menu gets closed again)
+}
+static void qh_end() {
+  if (!g_qh_opened.exchange(false)) return;
+  std::string key;
+  { std::lock_guard<std::mutex> l(CFG.m); key = CFG.qh_key; }
+  if (!key.empty()) plat::press_key(key);
+}
+
 static bool click_step(Engine &e) {
   using namespace std::chrono;
+  static thread_local QhRun qh;
+  static thread_local bool first = true;
+  if (first) {
+    first = false;
+    { std::lock_guard<std::mutex> l(CFG.m); qh.on = CFG.qh_on; }
+    if (qh.on && !qh_begin(e, qh)) { if (e.running) js("onQhMiss()"); return false; }
+  }
+  if (qh.on) {
+    int btn;
+    { std::lock_guard<std::mutex> l(CFG.m); btn = index_of(CFG.button, {"Left", "Right", "Middle"}); }
+    plat::click_at(qh.x, qh.y, btn < 0 ? 0 : btn);
+    return true;
+  }
   Snap s = snapshot(true);
   static thread_local bool relay = false;
   bool want;
@@ -264,6 +328,7 @@ static Engine KENGINE("key", key_step, key_interval);
 static std::mutex g_state_m;
 static std::string g_binding;  // "", "hotkey", "killkey", "key_hot" or "key_target"
 static std::atomic<bool> g_picking{false};
+static std::string g_pick_target;  // "" = Multi list, "qh" = Quick heal spot (guarded by g_state_m)
 static std::set<std::string> g_held;  // only touched on the hook thread
 
 static std::string positions_json() {
@@ -278,6 +343,7 @@ static std::string *bind_slot(const std::string &key) {
   if (key == "killkey") return &CFG.killkey;
   if (key == "key_hot") return &CFG.key_hot;
   if (key == "key_target") return &CFG.key_target;
+  if (key == "qh_key") return &CFG.qh_key;
   return nullptr;
 }
 
@@ -293,7 +359,7 @@ static void finish_bind(const std::string &id) {
     // NYC's own start/stop keys vs keys NYC presses for you
     const std::vector<std::pair<std::string, std::string *>> hots = {
         {"hotkey", &CFG.hotkey}, {"killkey", &CFG.killkey}, {"key_hot", &CFG.key_hot}};
-    const std::vector<std::string *> presses = {&CFG.key_target};
+    const std::vector<std::string *> presses = {&CFG.key_target, &CFG.qh_key};
     bool is_hotkey = key == "hotkey" || key == "killkey" || key == "key_hot";
     bool is_hot_id = false;
     for (auto &h : hots) is_hot_id = is_hot_id || (h.first != key && *h.second == id);
@@ -361,6 +427,14 @@ static void on_key(const std::string &id, bool down) {
 
 static void on_pick(int x, int y) {
   if (!g_picking.exchange(false)) return;
+  std::string target;
+  { std::lock_guard<std::mutex> l(g_state_m); target.swap(g_pick_target); }
+  if (target == "qh") {
+    { std::lock_guard<std::mutex> l(CFG.m); CFG.qh_x = x; CFG.qh_y = y; }
+    CFG.save();
+    js("onSpot('qh'," + std::to_string(x) + "," + std::to_string(y) + ")");
+    return;
+  }
   { std::lock_guard<std::mutex> l(CFG.m); if (CFG.positions.size() < 500) CFG.positions.emplace_back(x, y); }
   CFG.save();
   js("onPositions(" + positions_json() + ")");
@@ -398,7 +472,7 @@ static void restore_icon() {
 }
 
 // ---- auto update: bump NYC_VERSION for every release (tag it v<NYC_VERSION> on GitHub)
-#define NYC_VERSION "1.0.11"
+#define NYC_VERSION "1.0.12"
 #define NYC_REPO "BeaglewareTM/Autoclicker"
 static void start_updater() {
   std::thread([] {
@@ -472,7 +546,8 @@ static void bind_all() {
     { std::lock_guard<std::mutex> l(CFG.m); j = CFG.to_json_locked(); j["hotkey_name"] = plat::key_name(CFG.hotkey);
       j["killkey_name"] = plat::key_name(CFG.killkey);
       j["key_hot_name"] = plat::key_name(CFG.key_hot);
-      j["key_target_name"] = plat::key_name(CFG.key_target); }
+      j["key_target_name"] = plat::key_name(CFG.key_target);
+      j["qh_key_name"] = plat::key_name(CFG.qh_key); }
     j["platform"] = plat::name();
     j["version"] = NYC_VERSION;
     int p = g_perm.load();
@@ -503,6 +578,8 @@ static void bind_all() {
         else if (k == "key_mode") { CFG.key_mode = v.get<std::string>(); kstop = true; }
         else if (k == "key_delay") CFG.key_delay = v.get<double>();
         else if (k == "key_burst") CFG.key_burst = (int)std::lround(v.get<double>());
+        else if (k == "qh_on") { CFG.qh_on = v.get<bool>(); stop = true; }
+        else if (k == "qh_find") { CFG.qh_find = v.get<std::string>(); stop = true; }
       } catch (...) {}
       CFG.sanitize();
     }
@@ -538,7 +615,7 @@ static void bind_all() {
   W->bind("bc_start_bind", [](Args req) {
     json a = args(req);
     if (!a.empty() && a[0].is_string() &&
-        (a[0] == "hotkey" || a[0] == "killkey" || a[0] == "key_hot" || a[0] == "key_target")) {
+        (a[0] == "hotkey" || a[0] == "killkey" || a[0] == "key_hot" || a[0] == "key_target" || a[0] == "qh_key")) {
       std::lock_guard<std::mutex> l(g_state_m);
       g_binding = a[0].get<std::string>();
     }
@@ -575,7 +652,12 @@ static void bind_all() {
     CFG.save();
     return std::string("null");
   });
-  W->bind("bc_start_pick", [](Args) {
+  W->bind("bc_start_pick", [](Args req) {
+    json a = args(req);
+    {
+      std::lock_guard<std::mutex> l(g_state_m);
+      g_pick_target = (!a.empty() && a[0].is_string() && a[0] == "qh") ? "qh" : "";
+    }
     ENGINE.stop();
     KENGINE.stop();
     g_picking = true;

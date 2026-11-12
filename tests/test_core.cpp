@@ -3,7 +3,11 @@
 #undef main
 #include <cassert>
 #include <cstdio>
-namespace plat { extern int CHAT_RELAY; }
+namespace plat { extern int CHAT_RELAY; extern int FOOD_VISIBLE; }
+#include "food_detect.h"
+#include <tuple>
+#include <cstdlib>
+#include <vector>
 extern std::atomic<long> CLICKS; extern std::atomic<long> AT; extern std::atomic<long> KEYS;
 using namespace std::chrono_literals;
 static webview::webview *M;
@@ -16,7 +20,7 @@ int main() {
   static webview::webview w(false, nullptr); W = &w; M = &w; bind_all();
   // state + sanitizing
   auto st = json::parse(M->call("bc_get_state", "[]")); printf("%s\n", st.dump().c_str());
-  if (st.value("version", "") != "1.0.11") { printf("FAIL version missing\n"); return 1; }
+  if (st.value("version", "") != "1.0.12") { printf("FAIL version missing\n"); return 1; }
   CHECK(st["cps"] == 20.0 && st["hotkey_name"] == "F6" && st["killkey_name"] == "Insert" && st["theme"] == "Dark");
   M->call("bc_set", R"(["cps", 99999])"); CHECK(CFG.cps == 1000);
   M->call("bc_set", R"(["cps", "garbage"])"); CHECK(CFG.cps == 1000);
@@ -75,6 +79,50 @@ int main() {
   ENGINE.start(0); std::this_thread::sleep_for(50ms); CHECK(plat::CHAT_RELAY == 1);
   ENGINE.stop(); std::this_thread::sleep_for(50ms); CHECK(plat::CHAT_RELAY == 0);
   M->call("bc_set", R"(["chat_type", false])");
+  // ---------- booga: quick heal ----------
+  {
+    // the real screen detector, on real screenshots (and the full screen scaled to 1080p / 720p)
+    struct Case { const char *f; bool want; int x, y; };
+    const Case cases[] = {{"full", true, 2002, 340}, {"full1080", true, 1505, 255}, {"full720", true, 1003, 170},
+                          {"inv", true, 297, 334}, {"crop", true, 83, 85}, {"labelled", true, 74, 80}, {"bars", false, 0, 0}};
+    for (auto &c : cases) {
+      std::ifstream f(std::string("tests/food/") + c.f + ".raw", std::ios::binary);
+      int wh[2] = {0, 0};
+      f.read(reinterpret_cast<char *>(wh), 8);
+      std::vector<uint8_t> px((size_t)wh[0] * wh[1] * 4);
+      f.read(reinterpret_cast<char *>(px.data()), px.size());
+      int x = -1, y = -1;
+      bool got = food::find_bloodfruit(px.data(), wh[0], wh[1], wh[0] * 4, x, y);
+      printf("food %-9s %s %d,%d\n", c.f, got ? "found" : "none", x, y);
+      CHECK(got == c.want && (!got || (std::abs(x - c.x) <= 25 && std::abs(y - c.y) <= 25)));
+    }
+    M->call("bc_set", R"(["armed", true])"); M->call("bc_set", R"(["mode", "Toggle"])"); M->call("bc_set", R"(["ctype", "Single"])");
+    M->call("bc_set", R"(["qh_on", true])"); CHECK(CFG.qh_on && CFG.qh_find == "Auto find" && CFG.qh_key == "vk:67");
+    auto run = [&](int vis) { plat::FOOD_VISIBLE = vis; KEYS = 0; long a0 = AT;
+      tap(CFG.hotkey.c_str()); std::this_thread::sleep_for(250ms); bool ran = ENGINE.running; long clicks = AT - a0;
+      if (ran) { tap(CFG.hotkey.c_str()); } std::this_thread::sleep_for(60ms);
+      return std::make_tuple(ran, clicks, (long)KEYS); };
+    auto [r1, c1, k1] = run(1);  // menu already open: no key at start or end
+    printf("quick heal open:   ran=%d clicks=%ld keys=%ld\n", r1, c1, k1);
+    CHECK(r1 && c1 > 0 && k1 == 0);
+    auto [r2, c2, k2] = run(2);  // menu closed: opens it, clicks, closes it
+    printf("quick heal closed: ran=%d clicks=%ld keys=%ld\n", r2, c2, k2);
+    CHECK(r2 && c2 > 0 && k2 == 2);
+    auto [r3, c3, k3] = run(0);  // no Bloodfruit: opens, gives up, closes, never clicks
+    printf("quick heal none:   ran=%d clicks=%ld keys=%ld\n", r3, c3, k3);
+    CHECK(!r3 && c3 == 0 && k3 == 2);
+    M->call("bc_set", R"(["qh_find", "Set spot"])");
+    auto [r4, c4, k4] = run(1);  // no spot saved yet: does nothing
+    CHECK(!r4 && c4 == 0 && k4 == 0);
+    M->call("bc_start_pick", R"(["qh"])"); on_pick(500, 600); CHECK(CFG.qh_x == 500 && CFG.qh_y == 600);
+    auto [r5, c5, k5] = run(0);
+    CHECK(r5 && c5 > 0 && k5 == 2);
+    { Settings s7; s7.load(); CHECK(s7.qh_on && s7.qh_find == "Set spot" && s7.qh_x == 500 && s7.qh_y == 600); }
+    M->call("bc_start_bind", R"(["qh_key"])"); tap(CFG.hotkey.c_str()); CHECK(CFG.qh_key == "vk:67");  // can't be a hotkey
+    M->call("bc_set", R"(["qh_on", false])"); M->call("bc_set", R"(["qh_find", "Auto find"])");
+    M->call("bc_set", R"(["armed", false])");
+    plat::FOOD_VISIBLE = 0;
+  }
   // ---------- key macro ----------
   { std::ofstream o("/tmp/beagle_test_cfg/settings.json"); o << "{}"; }
   CFG.load();

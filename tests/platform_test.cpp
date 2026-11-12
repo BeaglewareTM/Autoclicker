@@ -23,6 +23,7 @@ bool wait_until(Clock::time_point t, const std::atomic<bool> &r) {
 std::string key_name(const std::string &id) { return id.empty() ? "Not set" : id == "vk:117" ? "F6" : id == "vk:45" ? "Insert" : id; }
 std::string default_hotkey() { return "vk:117"; } std::string default_killkey() { return "vk:45"; }
 std::string default_keyhot() { return "vk:118"; }
+std::string default_qh_key() { return "vk:67"; }
 bool is_escape(const std::string &id) { return id == "vk:27"; }
 bool is_clear_key(const std::string &id) { return id == "vk:8"; }
 std::filesystem::path config_dir() { return "/tmp/beagle_test_cfg"; }
@@ -30,6 +31,11 @@ void show_error(const std::string &) {}
 std::filesystem::path choose_icon_file() { return {}; }
 bool update_fetch(const char *, const char *) { return false; }
 int CHAT_RELAY = 0;
+int FOOD_VISIBLE = 0;  // 1 = always visible, 2 = only after a key was pressed (menu opened)
+bool find_food(int &x, int &y) {
+  if (FOOD_VISIBLE == 1 || (FOOD_VISIBLE == 2 && KEYS > 0)) { x = 77; y = 88; return true; }
+  return false;
+}
 void chat_relay(bool on, const std::vector<std::string> &) { CHAT_RELAY = on ? 1 : 0; }
 bool chat_flush() { return false; }
 void update_install_and_restart() { std::abort(); }

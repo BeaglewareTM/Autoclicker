@@ -41,6 +41,8 @@ body{font-family:Inter,"Segoe UI Variable","Segoe UI",sans-serif;-webkit-font-sm
 .grp.shut .kids{max-height:0;margin-top:0;margin-bottom:0}
 .cat.kid{height:30px;padding:0 14px;font-size:13px;border-radius:7px}
 .cat.kid.on{box-shadow:none}
+.seg.s2{grid-auto-columns:86px}.seg.s2 .ind{width:86px}
+.spot.set{color:var(--tx)}
 #drspace{height:0;transition:height .22s cubic-bezier(.3,.7,.2,1)}
 .page.show{display:flex;flex-direction:column;gap:10px}
 
@@ -132,6 +134,14 @@ body{font-family:Inter,"Segoe UI Variable","Segoe UI",sans-serif;-webkit-font-sm
    <div class="panel">
    <div class="row"><div><div class="lbl">Type while clicking</div><div class="sub">Press / to type, Enter sends it, clicking never stops</div></div><div class="tg" id="chattype"><i></i></div></div>
    </div>
+   <div class="panel">
+    <div class="row"><div><div class="lbl">Quick heal</div><div class="sub" id="qhhint">Autoclicker clicks your food instead</div></div><div class="tg" id="qhon"><i></i></div></div>
+    <div class="row"><div><div class="lbl">Menu key</div><div class="sub">Opens the menu at start, closes it at stop</div></div><div class="box btn wide" data-bind="qh_key">C</div></div>
+    <div class="row"><div><div class="lbl">Food spot</div><div class="sub" id="qhfsub">Finds the Bloodfruit each time you start</div></div>
+     <div class="seg s2" data-key="qh_find"><div class="ind"></div><span>Auto find</span><span>Set spot</span></div></div>
+    <div class="reveal" id="qhman"><div>
+     <div class="row"><div><div class="lbl">Saved spot</div><div class="sub">Click your Bloodfruit once to save it</div></div><div class="box btn wide spot" id="qhspot" style="color:var(--sub)">Set spot</div></div>
+    </div></div>
   </div>
   <div class="page" data-p="keys" data-t="Key Macro"><div class="panel">
    <div class="row"><div><div class="lbl">Key macro</div><div class="sub" id="khint">Turn on to use the hotkey</div></div>
@@ -194,7 +204,8 @@ Neon:d('#050505','#0b0b0b','#1a1a1a','#111111','#1b1b1b','#f2fff7','#86a392','#3
 Mono:d('#0a0a0a','#111111','#222222','#171717','#222222','#f5f5f5','#8a8a8a','#e5e5e5','#2a2a2a')};
 const DESC={ctype:['One click each time','Two clicks each time','Clicks saved spots in order'],
             mode:['Press once to start and stop','Clicks while you hold the key','Fires a set number of clicks'],
-            key_mode:['Press once to start and stop','Presses while you hold the key','Fires a set number of presses']};
+            key_mode:['Press once to start and stop','Presses while you hold the key','Fires a set number of presses'],
+            qh_find:['Finds the Bloodfruit each time you start','Clicks the spot you saved']};
 let S={}, picking=false, binding=null;
 function delayHint(){const v=+S.key_delay;const per=1000/v;
   $('kdsub').textContent=v<10?'Capped at 100 per second':'Wait between presses, about '+(per>=10?Math.round(per):per.toFixed(1))+' per second';}
@@ -250,6 +261,7 @@ function segSet(seg,val,fire){const opts=[...seg.querySelectorAll('span')];let i
   if(k==='ctype'){$('ctsub').textContent=DESC.ctype[i];reveal($('multi'),i===2);}
   if(k==='mode'){$('actsub').textContent=DESC.mode[i];reveal($('burst'),i===2);}
   if(k==='key_mode'){$('kactsub').textContent=DESC.key_mode[i];reveal($('kburst'),i===2);}
+  if(k==='qh_find'){$('qhfsub').textContent=DESC.qh_find[i];reveal($('qhman'),i===1);}
   if(fire){S[k]=opts[i].textContent;call('set',k,S[k]);}}
 document.querySelectorAll('.seg').forEach(seg=>seg.querySelectorAll('span').forEach(o=>o.onclick=()=>{if(!picking)segSet(seg,o.textContent,true);}));
 
@@ -296,7 +308,7 @@ document.querySelectorAll('[data-bind]').forEach(b=>b.onclick=()=>{
   if(binding===b.dataset.bind){binding=null;call('cancel_bind');return;}
   binding=b.dataset.bind;b.classList.add('wait');b.textContent='Press a key';call('start_bind',binding);});
 window.onBind=(key,name)=>{const b=document.querySelector('[data-bind="'+key+'"]');binding=null;
-  if(!b)return;b.classList.remove('wait');S[key+'_name']=name;b.textContent=name;if(key==='hotkey')setArmed(S.armed);if(key==='key_hot'||key==='key_target')setKArmed(S.key_on);};
+  if(!b)return;b.classList.remove('wait');S[key+'_name']=name;b.textContent=name;if(key==='hotkey'){setArmed(S.armed);qhHint();}if(key==='key_hot'||key==='key_target')setKArmed(S.key_on);};
 
 /* ---------- multi positions ---------- */
 const pl=$('plist'),add=$('add'),addt=$('addt');
@@ -306,7 +318,16 @@ function drawPos(list){const before=winH();S.positions=list;pl.innerHTML='';
     r.innerHTML='<span class="n">'+(i+1)+'</span><span class="c"><span><em>X</em>'+p[0]+'</span><span><em>Y</em>'+p[1]+'</span></span><span class="x" title="Remove"><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span>';
     r.querySelector('.x').onclick=()=>{if(!picking)call('remove_pos',i);};pl.appendChild(r);});
   if($('multi').classList.contains('show')&&winH()!==before)fit();}
-function endPick(){picking=false;addt.textContent='Add position';add.style.color='';}
+function endPick(){picking=false;addt.textContent='Add position';add.style.color='';
+  const qs=$('qhspot');if(qs.classList.contains('wait')){qs.classList.remove('wait');qhSpot();}}
+/* ---------- Booga: Quick heal ---------- */
+let qhT=0;
+function qhSpot(){const p=S.qh_spot||[-1,-1],b=$('qhspot');b.classList.toggle('set',p[0]>=0);b.style.color=p[0]>=0?'var(--tx)':'var(--sub)';b.textContent=p[0]>=0?'X '+p[0]+'  Y '+p[1]:'Set spot';}
+function qhHint(){clearTimeout(qhT);$('qhhint').textContent=S.qh_on?(S.hotkey_name==='Not set'?'Set an Autoclicker hotkey first':S.hotkey_name+' now heals at your click speed'):'Autoclicker clicks your food instead';}
+$('qhon').onclick=()=>{if(picking)return;S.qh_on=!S.qh_on;$('qhon').classList.toggle('on',S.qh_on);qhHint();call('set','qh_on',S.qh_on);};
+$('qhspot').onclick=()=>{if(picking){call('cancel_pick');endPick();return;}picking=true;const b=$('qhspot');b.classList.add('wait');b.style.color='';b.textContent='Click the spot';call('start_pick','qh');};
+window.onSpot=(t,x,y)=>{S.qh_spot=[x,y];endPick();qhSpot();};
+window.onQhMiss=()=>{clearTimeout(qhT);$('qhhint').textContent=S.qh_find==='Set spot'?'Save your food spot first':"Couldn't find your Bloodfruit";qhT=setTimeout(qhHint,3000);};
 
 add.onclick=()=>{if(picking){call('cancel_pick');endPick();return;}picking=true;addt.textContent='Click anywhere';add.style.color='var(--ac)';call('start_pick');};
 $('clr').onclick=()=>{if(!picking)call('clear_pos');};
@@ -377,6 +398,7 @@ function applyAll(){
   showIcon();
   setArmed(!!S.armed);
   setKArmed(!!S.key_on);
+  $('qhon').classList.toggle('on',!!S.qh_on);qhSpot();qhHint();
   drawPos(S.positions||[]);
   $('ver').textContent=S.version?'Version '+S.version:'';
   ['st','kst'].forEach(id=>{$(id).textContent='Stopped';$(id).classList.remove('run');});

@@ -40,7 +40,7 @@ pushd src
 windres app.rc -O coff -o ..\build\app.res.o || goto fail
 popd
 g++ -std=c++17 -O2 -Ivendor -Ivendor\mingw src\main.cpp src\platform_win.cpp build\app.res.o -o "build\NYC.exe" ^
-    -static -mwindows -s -lgdi32 -ldwmapi -ladvapi32 -lole32 -lshell32 -lshlwapi -luser32 -lversion -luuid -lwindowscodecs -lcomdlg32 -lwinhttp || goto fail
+    -static -mwindows -s -lgdi32 -ldwmapi -ladvapi32 -lole32 -lshell32 -lshlwapi -luser32 -lversion -luuid -lwindowscodecs -lcomdlg32 -lwinhttp -Isrc || goto fail
 goto done
 
 :fail

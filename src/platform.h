@@ -49,6 +49,7 @@ std::string key_name(const std::string &id);
 std::string default_hotkey();
 std::string default_killkey();
 std::string default_keyhot();
+std::string default_qh_key();  // Booga Quick heal menu key (C)
 bool is_escape(const std::string &id);
 bool is_clear_key(const std::string &id);
 
@@ -68,6 +69,10 @@ void show_error(const std::string &msg);
 // "Type while clicking": while on, keys typed into the game are held back and replayed into
 // Roblox chat between clicks (press / to open chat, type them, then clicking continues).
 // keep = key ids that must never be held back (the hotkeys).
+// Booga Quick heal: screenshot the screen and look for a Bloodfruit in an open inventory.
+// Returns true with its screen position. Only ever called when the user presses the hotkey.
+bool find_food(int &x, int &y);
+
 void chat_relay(bool on, const std::vector<std::string> &keep);
 // Called by the click engine before each click. Types anything waiting; false if nothing was waiting.
 bool chat_flush();
