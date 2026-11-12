@@ -549,9 +549,6 @@ std::string key_name(const std::string &id) {
 std::string default_hotkey() { return "vk:117"; }  // F6
 std::string default_killkey() { return "vk:45"; }  // Insert
 std::string default_keyhot() { return "vk:118"; }  // F7
-std::string default_hdhot() { return "vk:119"; }     // F8
-std::string default_heal_key() { return "vk:67"; }   // C
-std::string default_drop_key() { return "vk:90"; }   // Z
 bool is_escape(const std::string &id) { return id == "vk:27"; }
 bool is_clear_key(const std::string &id) { return id == "vk:8" || id == "vk:46"; }
 

@@ -16,7 +16,7 @@ int main() {
   static webview::webview w(false, nullptr); W = &w; M = &w; bind_all();
   // state + sanitizing
   auto st = json::parse(M->call("bc_get_state", "[]")); printf("%s\n", st.dump().c_str());
-  if (st.value("version", "") != "1.0.10") { printf("FAIL version missing\n"); return 1; }
+  if (st.value("version", "") != "1.0.11") { printf("FAIL version missing\n"); return 1; }
   CHECK(st["cps"] == 20.0 && st["hotkey_name"] == "F6" && st["killkey_name"] == "Insert" && st["theme"] == "Dark");
   M->call("bc_set", R"(["cps", 99999])"); CHECK(CFG.cps == 1000);
   M->call("bc_set", R"(["cps", "garbage"])"); CHECK(CFG.cps == 1000);
@@ -75,28 +75,6 @@ int main() {
   ENGINE.start(0); std::this_thread::sleep_for(50ms); CHECK(plat::CHAT_RELAY == 1);
   ENGINE.stop(); std::this_thread::sleep_for(50ms); CHECK(plat::CHAT_RELAY == 0);
   M->call("bc_set", R"(["chat_type", false])");
-  // ---------- booga: heal and drop ----------
-  {
-    auto st2 = json::parse(M->call("bc_get_state", "[]"));
-    CHECK(st2["hd_hot_name"] == "vk:119" && st2["hd_heal_key_name"] == "vk:67" && st2["hd_drop_key_name"] == "vk:90" && st2["hd_wait"] == 30);
-    CHECK(!HDENGINE.running);
-    M->call("bc_set", R"(["hd_on", true])");
-    tap("vk:119"); std::this_thread::sleep_for(50ms); CHECK(!HDENGINE.running);  // no spots yet: does nothing
-    M->call("bc_start_pick", R"(["hd_heal"])"); on_pick(100, 200);
-    M->call("bc_start_pick", R"(["hd_drop"])"); on_pick(300, 400);
-    CHECK(CFG.hd_heal_x == 100 && CFG.hd_drop_y == 400);
-    { Settings s6; s6.load(); CHECK(s6.hd_heal_x == 100 && s6.hd_heal_y == 200 && s6.hd_drop_x == 300 && s6.hd_on); }
-    M->call("bc_set", R"(["hd_wait", 10])");
-    long k0 = KEYS, a0 = AT;
-    tap("vk:119"); std::this_thread::sleep_for(400ms); tap("vk:119"); std::this_thread::sleep_for(50ms);
-    long dk = KEYS - k0, da = AT - a0;
-    printf("heal/drop: keys=%ld clicks=%ld in 400ms\n", dk, da);
-    CHECK(!HDENGINE.running && dk >= 6 && da >= 6 && std::labs(dk - da) <= 1);
-    M->call("bc_start_bind", R"(["hd_heal_key"])"); tap("vk:119"); CHECK(CFG.hd_heal_key == "vk:67");  // can't be a hotkey
-    M->call("bc_start_bind", R"(["hd_hot"])"); tap("vk:67"); CHECK(CFG.hd_hot == "vk:119");            // can't be a pressed key
-    tap("vk:119"); std::this_thread::sleep_for(30ms); CHECK(HDENGINE.running);
-    tap(CFG.killkey.c_str()); std::this_thread::sleep_for(30ms); CHECK(!HDENGINE.running && !CFG.hd_on);
-  }
   // ---------- key macro ----------
   { std::ofstream o("/tmp/beagle_test_cfg/settings.json"); o << "{}"; }
   CFG.load();

@@ -23,9 +23,6 @@ bool wait_until(Clock::time_point t, const std::atomic<bool> &r) {
 std::string key_name(const std::string &id) { return id.empty() ? "Not set" : id == "vk:117" ? "F6" : id == "vk:45" ? "Insert" : id; }
 std::string default_hotkey() { return "vk:117"; } std::string default_killkey() { return "vk:45"; }
 std::string default_keyhot() { return "vk:118"; }
-std::string default_hdhot() { return "vk:119"; }
-std::string default_heal_key() { return "vk:67"; }
-std::string default_drop_key() { return "vk:90"; }
 bool is_escape(const std::string &id) { return id == "vk:27"; }
 bool is_clear_key(const std::string &id) { return id == "vk:8"; }
 std::filesystem::path config_dir() { return "/tmp/beagle_test_cfg"; }

@@ -43,7 +43,7 @@ body{font-family:Inter,"Segoe UI Variable","Segoe UI",sans-serif;-webkit-font-sm
 .cat.kid.on{box-shadow:none}
 #drspace{height:0;transition:height .22s cubic-bezier(.3,.7,.2,1)}
 .page.show{display:flex;flex-direction:column;gap:10px}
-.keyb{width:52px;font-weight:600}.spot{width:118px;color:var(--sub)}.spot.set{color:var(--tx)}.spot.wait,.keyb.wait{color:var(--ac)}
+
 .panel{background:var(--pn);border:1px solid var(--bd);border-radius:10px;padding:8px 18px;transition:background .25s}
 .row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;gap:12px}
 .lbl{font-size:13.5px}.sub{font-size:11.5px;color:var(--sub);margin-top:2px}.sub:empty{display:none}
@@ -131,17 +131,6 @@ body{font-family:Inter,"Segoe UI Variable","Segoe UI",sans-serif;-webkit-font-sm
   <div class="page" data-p="booga" data-t="Booga">
    <div class="panel">
    <div class="row"><div><div class="lbl">Type while clicking</div><div class="sub">Press / to type, Enter sends it, clicking never stops</div></div><div class="tg" id="chattype"><i></i></div></div>
-   </div>
-   <div class="panel">
-    <div class="row"><div><div class="lbl">Heal and drop</div><div class="sub" id="hdhint">Turn on to use the hotkey</div></div>
-     <div style="display:flex;align-items:center;gap:12px"><span class="stt" id="hdst">Stopped</span><div class="tg" id="hdon"><i></i></div></div></div>
-    <div class="row"><div><div class="lbl">Heal</div><div class="sub">Opens the menu, then clicks your food</div></div>
-     <div style="display:flex;gap:6px"><div class="box btn keyb" data-bind="hd_heal_key">C</div><div class="box btn spot" data-spot="hd_heal">Set spot</div></div></div>
-    <div class="row"><div><div class="lbl">Drop chest</div><div class="sub">Opens the shop, then clicks the chest button</div></div>
-     <div style="display:flex;gap:6px"><div class="box btn keyb" data-bind="hd_drop_key">Z</div><div class="box btn spot" data-spot="hd_drop">Set spot</div></div></div>
-    <div class="row"><div><div class="lbl">Menu switch wait</div><div class="sub">Time for the menu to open before clicking</div></div>
-     <div class="step" data-key="hd_wait" data-min="5" data-max="1000" data-step="5" data-dec="0"><div class="box btn m">−</div><div class="box v"><input><em>ms</em></div><div class="box btn m">+</div></div></div>
-    <div class="row"><div><div class="lbl">Hotkey</div><div class="sub">Key that starts and stops</div></div><div class="box btn wide" data-bind="hd_hot">F8</div></div>
    </div>
   </div>
   <div class="page" data-p="keys" data-t="Key Macro"><div class="panel">
@@ -305,9 +294,9 @@ document.querySelectorAll('[data-bind]').forEach(b=>b.onclick=()=>{
   if(picking)return;
   if(binding){const ob=document.querySelector('[data-bind="'+binding+'"]');ob.classList.remove('wait');ob.textContent=S[binding+'_name'];}
   if(binding===b.dataset.bind){binding=null;call('cancel_bind');return;}
-  binding=b.dataset.bind;b.classList.add('wait');b.textContent=b.classList.contains('keyb')?'…':'Press a key';call('start_bind',binding);});
+  binding=b.dataset.bind;b.classList.add('wait');b.textContent='Press a key';call('start_bind',binding);});
 window.onBind=(key,name)=>{const b=document.querySelector('[data-bind="'+key+'"]');binding=null;
-  if(!b)return;b.classList.remove('wait');S[key+'_name']=name;b.textContent=name;if(key==='hotkey')setArmed(S.armed);if(key==='key_hot'||key==='key_target')setKArmed(S.key_on);if(key==='hd_hot')setHd(S.hd_on);};
+  if(!b)return;b.classList.remove('wait');S[key+'_name']=name;b.textContent=name;if(key==='hotkey')setArmed(S.armed);if(key==='key_hot'||key==='key_target')setKArmed(S.key_on);};
 
 /* ---------- multi positions ---------- */
 const pl=$('plist'),add=$('add'),addt=$('addt');
@@ -317,27 +306,16 @@ function drawPos(list){const before=winH();S.positions=list;pl.innerHTML='';
     r.innerHTML='<span class="n">'+(i+1)+'</span><span class="c"><span><em>X</em>'+p[0]+'</span><span><em>Y</em>'+p[1]+'</span></span><span class="x" title="Remove"><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span>';
     r.querySelector('.x').onclick=()=>{if(!picking)call('remove_pos',i);};pl.appendChild(r);});
   if($('multi').classList.contains('show')&&winH()!==before)fit();}
-function endPick(){picking=false;addt.textContent='Add position';add.style.color='';
-  document.querySelectorAll('[data-spot]').forEach(b=>{if(b.classList.contains('wait')){b.classList.remove('wait');spotText(b.dataset.spot);}});}
-/* ---------- Booga: Heal and drop ---------- */
-function spotText(t){const b=document.querySelector('[data-spot="'+t+'"]');const p=S[t+'_spot']||[-1,-1];const set=p[0]>=0;
-  b.classList.toggle('set',set);b.textContent=set?'X '+p[0]+'  Y '+p[1]:'Set spot';}
-document.querySelectorAll('[data-spot]').forEach(b=>b.onclick=()=>{
-  if(picking){call('cancel_pick');endPick();return;}
-  picking=true;b.classList.add('wait');b.textContent='Click the spot';call('start_pick',b.dataset.spot);});
-window.onSpot=(t,x,y)=>{S[t+'_spot']=[x,y];endPick();spotText(t);setHd(S.hd_on);};
-function setHd(on){S.hd_on=on;$('hdon').classList.toggle('on',on);
-  const ready=(S.hd_heal_spot||[-1])[0]>=0&&(S.hd_drop_spot||[-1])[0]>=0;
-  $('hdhint').textContent=!on?'Turn on to use the hotkey':!ready?'Set both spots below':S.hd_hot_name==='Not set'?'Set a hotkey below':'Press '+S.hd_hot_name+' to start';}
-$('hdon').onclick=()=>{if(picking)return;S.hd_on=!S.hd_on;setHd(S.hd_on);call('set','hd_on',S.hd_on);};
+function endPick(){picking=false;addt.textContent='Add position';add.style.color='';}
+
 add.onclick=()=>{if(picking){call('cancel_pick');endPick();return;}picking=true;addt.textContent='Click anywhere';add.style.color='var(--ac)';call('start_pick');};
 $('clr').onclick=()=>{if(!picking)call('clear_pos');};
 window.onPositions=list=>{endPick();drawPos(list);};
 window.onPickCancel=()=>endPick();
 
 /* ---------- status from engine ---------- */
-window.onRunning=(which,on)=>{const s=$(which==='key'?'kst':which==='hd'?'hdst':'st');s.textContent=on?'Running':'Stopped';s.classList.toggle('run',on);};
-window.onKilled=()=>{setArmed(false);setKArmed(false);setHd(false);window.onRunning('click',false);window.onRunning('key',false);window.onRunning('hd',false);};
+window.onRunning=(which,on)=>{const s=$(which==='key'?'kst':'st');s.textContent=on?'Running':'Stopped';s.classList.toggle('run',on);};
+window.onKilled=()=>{setArmed(false);setKArmed(false);window.onRunning('click',false);window.onRunning('key',false);};
 
 /* ---------- custom icon ---------- */
 let iconMsgT=0;
@@ -399,10 +377,9 @@ function applyAll(){
   showIcon();
   setArmed(!!S.armed);
   setKArmed(!!S.key_on);
-  spotText('hd_heal');spotText('hd_drop');setHd(!!S.hd_on);
   drawPos(S.positions||[]);
   $('ver').textContent=S.version?'Version '+S.version:'';
-  ['st','kst','hdst'].forEach(id=>{$(id).textContent='Stopped';$(id).classList.remove('run');});
+  ['st','kst'].forEach(id=>{$(id).textContent='Stopped';$(id).classList.remove('run');});
   void win.offsetHeight;
   document.querySelectorAll('.reveal').forEach(r=>r.style.transition='');
 }
