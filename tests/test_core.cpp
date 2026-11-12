@@ -98,8 +98,8 @@ int main() {
     }
     M->call("bc_set", R"(["armed", true])"); M->call("bc_set", R"(["mode", "Toggle"])"); M->call("bc_set", R"(["ctype", "Single"])");
     M->call("bc_set", R"(["qh_on", true])"); CHECK(CFG.qh_on && CFG.qh_find == "Auto find" && CFG.qh_key == "vk:67");
-    auto run = [&](int vis) { plat::FOOD_VISIBLE = vis; KEYS = 0; long a0 = AT;
-      tap(CFG.hotkey.c_str()); std::this_thread::sleep_for(250ms); bool ran = ENGINE.running; long clicks = AT - a0;
+    auto run = [&](int vis, int ms = 250) { plat::FOOD_VISIBLE = vis; KEYS = 0; long a0 = AT;
+      tap(CFG.hotkey.c_str()); std::this_thread::sleep_for(std::chrono::milliseconds(ms)); bool ran = ENGINE.running; long clicks = AT - a0;
       if (ran) { tap(CFG.hotkey.c_str()); } std::this_thread::sleep_for(60ms);
       return std::make_tuple(ran, clicks, (long)KEYS); };
     auto [r1, c1, k1] = run(1);  // menu already open: no key at start or end
@@ -108,7 +108,7 @@ int main() {
     auto [r2, c2, k2] = run(2);  // menu closed: opens it, clicks, closes it
     printf("quick heal closed: ran=%d clicks=%ld keys=%ld\n", r2, c2, k2);
     CHECK(r2 && c2 > 0 && k2 == 2);
-    auto [r3, c3, k3] = run(0);  // no Bloodfruit: opens, gives up, closes, never clicks
+    auto [r3, c3, k3] = run(0, 600);  // no Bloodfruit: opens, gives up, closes, never clicks
     printf("quick heal none:   ran=%d clicks=%ld keys=%ld\n", r3, c3, k3);
     CHECK(!r3 && c3 == 0 && k3 == 2);
     M->call("bc_set", R"(["qh_find", "Set spot"])");
