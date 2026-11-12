@@ -241,7 +241,8 @@ static void chat_sync(bool on) {
 // otherwise press the menu key, wait for it to open, then look again. At the end, close the
 // menu again only if NYC opened it.
 static std::atomic<bool> g_qh_opened{false};
-static constexpr int QH_MENU_WAIT_MS = 150;
+static constexpr int QH_SPOT_WAIT_MS = 60;     // Set spot: time for the menu to open
+static constexpr int QH_FIND_TIMEOUT_MS = 400;  // Auto find: give up if the food never appears
 struct QhRun { bool on = false, ready = false; int x = -1, y = -1; };
 static bool qh_begin(Engine &e, QhRun &r) {
   using namespace std::chrono;
@@ -252,17 +253,23 @@ static bool qh_begin(Engine &e, QhRun &r) {
     if (key.empty()) return false;
     plat::press_key(key);
     g_qh_opened = true;
-    return plat::wait_until(plat::Clock::now() + milliseconds(QH_MENU_WAIT_MS), e.running);
+    return true;
   };
   if (find == "Set spot") {
     if (sx < 0) return false;  // no spot saved yet
     if (!open_menu()) return false;
     r.x = sx; r.y = sy;
-    return true;
+    return plat::wait_until(plat::Clock::now() + milliseconds(QH_SPOT_WAIT_MS), e.running);
   }
-  if (plat::find_food(r.x, r.y)) return true;  // menu already open
+  if (plat::find_food(r.x, r.y)) return true;  // menu already open: click straight away
   if (!open_menu()) return false;
-  return plat::find_food(r.x, r.y);  // not found: stop (the menu gets closed again)
+  // Start the moment the menu appears instead of waiting a fixed time.
+  auto give_up = plat::Clock::now() + milliseconds(QH_FIND_TIMEOUT_MS);
+  while (e.running && plat::Clock::now() < give_up) {
+    if (plat::find_food(r.x, r.y)) return true;
+    if (!plat::wait_until(plat::Clock::now() + milliseconds(8), e.running)) return false;
+  }
+  return false;  // not found: stop (the menu gets closed again)
 }
 static void qh_end() {
   if (!g_qh_opened.exchange(false)) return;
@@ -472,7 +479,7 @@ static void restore_icon() {
 }
 
 // ---- auto update: bump NYC_VERSION for every release (tag it v<NYC_VERSION> on GitHub)
-#define NYC_VERSION "1.0.12"
+#define NYC_VERSION "1.0.13"
 #define NYC_REPO "BeaglewareTM/Autoclicker"
 static void start_updater() {
   std::thread([] {

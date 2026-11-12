@@ -20,7 +20,7 @@ int main() {
   static webview::webview w(false, nullptr); W = &w; M = &w; bind_all();
   // state + sanitizing
   auto st = json::parse(M->call("bc_get_state", "[]")); printf("%s\n", st.dump().c_str());
-  if (st.value("version", "") != "1.0.12") { printf("FAIL version missing\n"); return 1; }
+  if (st.value("version", "") != "1.0.13") { printf("FAIL version missing\n"); return 1; }
   CHECK(st["cps"] == 20.0 && st["hotkey_name"] == "F6" && st["killkey_name"] == "Insert" && st["theme"] == "Dark");
   M->call("bc_set", R"(["cps", 99999])"); CHECK(CFG.cps == 1000);
   M->call("bc_set", R"(["cps", "garbage"])"); CHECK(CFG.cps == 1000);
